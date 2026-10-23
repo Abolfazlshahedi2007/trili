@@ -136,6 +136,7 @@ class AdvancePayment(db.Model):
     __tablename__ = 'advance_payments'
     
     id = db.Column(db.Integer, primary_key=True)
+    payer = db.Column(db.String(20), default='owner', index=True) # 'owner' (مساعده پدر به راننده) یا 'driver' (واریزی راننده به حساب پدر)
     amount = db.Column(db.BigInteger, nullable=False, default=0) # تومان
     payment_date = db.Column(db.String(20), nullable=True) # تاریخ شمسی
     payment_method = db.Column(db.String(50), default='کارت به کارت')
@@ -150,6 +151,7 @@ class AdvancePayment(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'payer': self.payer or 'owner',
             'amount': self.amount,
             'payment_date': self.payment_date,
             'payment_method': self.payment_method,
@@ -175,7 +177,8 @@ class Settlement(db.Model):
     # طلب راننده
     driver_earned_share = db.Column(db.BigInteger, default=0) # حق‌الزحمه ۲۰٪
     driver_paid_expenses = db.Column(db.BigInteger, default=0) # خرج‌هایی که راننده از جیبش داده
-    total_driver_credit = db.Column(db.BigInteger, default=0) # کل طلب = سهم + خرج راننده
+    driver_transfers_to_owner = db.Column(db.BigInteger, default=0) # واریزی‌های راننده به حساب پدر
+    total_driver_credit = db.Column(db.BigInteger, default=0) # کل طلب = سهم + خرج راننده + واریزی به پدر
     
     # بدهی راننده
     driver_cash_collected = db.Column(db.BigInteger, default=0) # پیش‌کرایه نقدی دست راننده
@@ -203,6 +206,7 @@ class Settlement(db.Model):
             'total_net_freight': self.total_net_freight,
             'driver_earned_share': self.driver_earned_share,
             'driver_paid_expenses': self.driver_paid_expenses,
+            'driver_transfers_to_owner': self.driver_transfers_to_owner,
             'total_driver_credit': self.total_driver_credit,
             'driver_cash_collected': self.driver_cash_collected,
             'advances_paid_by_owner': self.advances_paid_by_owner,

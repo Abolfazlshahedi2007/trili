@@ -88,6 +88,15 @@ def init_db():
                 exp_cols = [row[1] for row in conn.execute(db.text("PRAGMA table_info(expenses)")).fetchall()]
                 if 'liability' not in exp_cols:
                     conn.execute(db.text("ALTER TABLE expenses ADD COLUMN liability VARCHAR(30) DEFAULT 'owner_machine'"))
+
+                pay_cols = [row[1] for row in conn.execute(db.text("PRAGMA table_info(advance_payments)")).fetchall()]
+                if 'payer' not in pay_cols:
+                    conn.execute(db.text("ALTER TABLE advance_payments ADD COLUMN payer VARCHAR(20) DEFAULT 'owner'"))
+
+                set_cols = [row[1] for row in conn.execute(db.text("PRAGMA table_info(settlements)")).fetchall()]
+                if 'driver_transfers_to_owner' not in set_cols:
+                    conn.execute(db.text("ALTER TABLE settlements ADD COLUMN driver_transfers_to_owner BIGINT DEFAULT 0"))
+
                 conn.commit()
         except Exception as e:
             print(f"Migration notice: {e}")
@@ -233,13 +242,18 @@ def get_summary():
     # Driver expenses (Owner liability paid by driver from pocket -> Credited to Driver)
     driver_paid_expenses = sum(e.amount for e in unsettled_expenses if e.paid_by == 'driver')
     owner_paid_expenses = sum(e.amount for e in unsettled_expenses if e.paid_by == 'owner')
-    advances_paid = sum(p.amount for p in unsettled_payments)
+    
+    # Two-way payments:
+    # 1. Driver transfers to Owner (واریزی راننده به حساب صاحب ماشین -> بستانکاری راننده)
+    driver_transfers_to_owner = sum(p.amount for p in unsettled_payments if getattr(p, 'payer', 'owner') == 'driver')
+    # 2. Advances paid by Owner to Driver (مساعده مالک به راننده -> بدهکاری راننده)
+    advances_paid_by_owner = sum(p.amount for p in unsettled_payments if getattr(p, 'payer', 'owner') != 'driver')
 
     # Strict Accounting Formula:
-    # Driver Credit (طلب راننده) = Earned Share + Road Expenses Paid by Driver
-    driver_total_credit = driver_share_unsettled + driver_paid_expenses
+    # Driver Credit (طلب راننده) = Earned Share + Road Expenses Paid by Driver + Money transferred to Owner
+    driver_total_credit = driver_share_unsettled + driver_paid_expenses + driver_transfers_to_owner
     # Driver Debit (بدهی راننده) = Cash collected by Driver on waybills + Advances paid by Owner
-    driver_total_debit = driver_cash_collected + advances_paid
+    driver_total_debit = driver_cash_collected + advances_paid_by_owner
     # Final Balance (+ Owner owes driver, - Driver owes owner)
     final_balance = driver_total_credit - driver_total_debit
 
@@ -252,7 +266,8 @@ def get_summary():
             'driver_share_unsettled': driver_share_unsettled,
             'driver_cash_collected': driver_cash_collected,
             'driver_paid_expenses': driver_paid_expenses,
-            'advances_paid': advances_paid,
+            'driver_transfers_to_owner': driver_transfers_to_owner,
+            'advances_paid': advances_paid_by_owner,
             'driver_total_credit': driver_total_credit,
             'driver_total_debit': driver_total_debit,
             'final_balance': final_balance
@@ -276,7 +291,8 @@ def get_summary():
         'driver_cash_collected': driver_cash_collected,
         'driver_paid_expenses': driver_paid_expenses,
         'owner_paid_expenses': owner_paid_expenses,
-        'advances_paid': advances_paid,
+        'driver_transfers_to_owner': driver_transfers_to_owner,
+        'advances_paid': advances_paid_by_owner,
         'driver_total_credit': driver_total_credit,
         'driver_total_debit': driver_total_debit,
         'final_balance': final_balance,
@@ -431,11 +447,18 @@ def get_payments():
 @app.route('/api/payments', methods=['POST'])
 def add_payment():
     actor_role = request.headers.get('X-Role', 'driver')
-    if actor_role != 'owner':
-        return jsonify({'status': 'error', 'message': 'فقط مالک مجاز به ثبت واریزی و مساعده است.'}), 403
-
     data = request.json or {}
+    
+    # Determine who paid:
+    # If submitted by driver, payer is ALWAYS 'driver' (واریز راننده به حساب مالک)
+    # If submitted by owner, owner can choose 'owner' (مساعده مالک به راننده) or 'driver' (واریزی راننده به کارت مالک)
+    if actor_role == 'driver':
+        payer = 'driver'
+    else:
+        payer = data.get('payer', 'owner')
+
     pay = AdvancePayment(
+        payer=payer,
         amount=parse_int_safe(data.get('amount')),
         payment_date=normalize_digits(data.get('payment_date')),
         payment_method=data.get('payment_method', 'کارت به کارت'),
@@ -446,7 +469,12 @@ def add_payment():
     db.session.add(pay)
     db.session.commit()
     
-    record_audit('CREATE', 'AdvancePayment', pay.id, actor_role, f"ثبت مساعده به راننده به مبلغ {pay.amount:,} تومان")
+    if pay.payer == 'driver':
+        log_desc = f"ثبت واریزی راننده به کارت مالک به مبلغ {pay.amount:,} تومان"
+    else:
+        log_desc = f"ثبت مساعده مالک به راننده به مبلغ {pay.amount:,} تومان"
+        
+    record_audit('CREATE', 'AdvancePayment', pay.id, actor_role, log_desc)
     return jsonify({'status': 'success', 'payment': pay.to_dict()})
 
 @app.route('/api/payments/<int:pay_id>', methods=['DELETE'])
@@ -457,7 +485,7 @@ def delete_payment(pay_id):
 
     pay = AdvancePayment.query.get_or_404(pay_id)
     if pay.is_settled:
-        return jsonify({'status': 'error', 'message': 'مساعده‌های تسویه شده قابل حذف نیستند.'}), 400
+        return jsonify({'status': 'error', 'message': 'مساعده‌ها و واریزی‌های تسویه شده قابل حذف نیستند.'}), 400
 
     info = f"حذف واریزی به مبلغ {pay.amount:,} تومان"
     db.session.delete(pay)
@@ -493,9 +521,12 @@ def create_settlement():
     driver_earned_share = sum(t.driver_share_amount or 0 for t in unsettled_trips)
     driver_paid_expenses = sum(e.amount for e in unsettled_expenses if e.paid_by == 'driver')
     driver_cash_collected = sum(t.cash_received_by_driver or 0 for t in unsettled_trips)
-    advances_paid_by_owner = sum(p.amount for p in unsettled_payments)
+    
+    # Separate driver transfers to owner from owner advances to driver
+    driver_transfers_to_owner = sum(p.amount for p in unsettled_payments if getattr(p, 'payer', 'owner') == 'driver')
+    advances_paid_by_owner = sum(p.amount for p in unsettled_payments if getattr(p, 'payer', 'owner') != 'driver')
 
-    total_driver_credit = driver_earned_share + driver_paid_expenses
+    total_driver_credit = driver_earned_share + driver_paid_expenses + driver_transfers_to_owner
     total_driver_debit = driver_cash_collected + advances_paid_by_owner
     final_balance = total_driver_credit - total_driver_debit
 
@@ -506,6 +537,7 @@ def create_settlement():
         total_net_freight=total_net_freight,
         driver_earned_share=driver_earned_share,
         driver_paid_expenses=driver_paid_expenses,
+        driver_transfers_to_owner=driver_transfers_to_owner,
         total_driver_credit=total_driver_credit,
         driver_cash_collected=driver_cash_collected,
         advances_paid_by_owner=advances_paid_by_owner,

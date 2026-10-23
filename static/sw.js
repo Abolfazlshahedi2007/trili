@@ -1,4 +1,4 @@
-const CACHE_NAME = 'trili-cache-v1';
+const CACHE_NAME = 'trili-cache-v2';
 const ASSETS = [
   '/',
   '/manifest.json',
@@ -7,10 +7,10 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (e) => {
+  self.skipWaiting();
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (e) => {
@@ -26,21 +26,36 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 
+// Network-First Strategy for fresh updates with offline fallback
 self.addEventListener('fetch', (e) => {
-  // Network first, falling back to cache for API or offline
+  if (e.request.method !== 'GET') return;
+
+  // API calls: Network first with offline JSON fallback
   if (e.request.url.includes('/api/')) {
     e.respondWith(
       fetch(e.request).catch(() => {
-        return new Response(JSON.stringify({ offline: true, message: 'آفلاین هستید' }), {
+        return new Response(JSON.stringify({ offline: true, message: 'دستگاه شما در حالت آفلاین است' }), {
           headers: { 'Content-Type': 'application/json' }
         });
       })
     );
-  } else {
-    e.respondWith(
-      caches.match(e.request).then((res) => {
-        return res || fetch(e.request);
-      })
-    );
+    return;
   }
+
+  // Web pages & assets: Network First, fallback to Cache
+  e.respondWith(
+    fetch(e.request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(e.request, responseToCache);
+          });
+        }
+        return networkResponse;
+      })
+      .catch(() => {
+        return caches.match(e.request);
+      })
+  );
 });
