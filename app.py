@@ -1,16 +1,17 @@
 import os
 import uuid
 from datetime import datetime
-from flask import Flask, request, jsonify, send_from_directory, render_template
+from flask import Flask, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
-from models import db, Setting, Trip, Expense, AdvancePayment, Settlement
+from sqlalchemy.orm import joinedload
+from models import db, Setting, Trip, Expense, AdvancePayment, Settlement, AuditLog
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 app = Flask(__name__, static_folder='static', static_url_path='')
-app.config['SECRET_KEY'] = 'trili-secret-key-1405'
+app.config['SECRET_KEY'] = 'trili-secure-fleet-key-1405'
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(BASE_DIR, 'trili.db')}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -23,17 +24,73 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'gif'}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# ----------------- Database Init & Seed -----------------
+# ----------------- QA & Data Sanitization Helpers -----------------
+def normalize_digits(value):
+    """Convert Persian and Arabic numerals to standard English digits."""
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        value = str(value)
+    persian_digits = '۰۱۲۳۴۵۶۷۸۹'
+    arabic_digits = '٠١٢٣٤٥٦٧٨٩'
+    for i in range(10):
+        value = value.replace(persian_digits[i], str(i)).replace(arabic_digits[i], str(i))
+    return value.strip()
+
+def parse_int_safe(value, default=0, allow_negative=False):
+    """Safely parse integer from raw string, preventing negative values and float inaccuracies."""
+    if value is None:
+        return default
+    s = normalize_digits(value).replace(',', '').replace('،', '')
+    try:
+        val = int(round(float(s)))
+        return val if allow_negative else max(0, val)
+    except (ValueError, TypeError):
+        return default
+
+def parse_float_safe(value, default=0.0):
+    if value is None:
+        return default
+    s = normalize_digits(value).replace(',', '').replace('،', '')
+    try:
+        val = float(s)
+        return max(0.0, val)
+    except (ValueError, TypeError):
+        return default
+
+# ----------------- Audit Trail Logging -----------------
+def record_audit(action, entity_type, entity_id, actor_role, details):
+    try:
+        audit = AuditLog(
+            action=action,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            actor_role=actor_role,
+            details=details
+        )
+        db.session.add(audit)
+    except Exception as e:
+        print(f"Audit log error: {e}")
+
+# ----------------- Database Init & Auto-Migration -----------------
 def init_db():
     with app.app_context():
         db.create_all()
-        # Auto-migrate: ensure owner_pin column exists
+        # Safe column migration for SQLite
         try:
             with db.engine.connect() as conn:
-                conn.execute(db.text("ALTER TABLE settings ADD COLUMN owner_pin VARCHAR(50) DEFAULT '1234'"))
+                existing_cols = [row[1] for row in conn.execute(db.text("PRAGMA table_info(settings)")).fetchall()]
+                if 'owner_pin' not in existing_cols:
+                    conn.execute(db.text("ALTER TABLE settings ADD COLUMN owner_pin VARCHAR(50) DEFAULT '1234'"))
+                if 'driver_share_basis' not in existing_cols:
+                    conn.execute(db.text("ALTER TABLE settings ADD COLUMN driver_share_basis VARCHAR(20) DEFAULT 'net'"))
+                
+                exp_cols = [row[1] for row in conn.execute(db.text("PRAGMA table_info(expenses)")).fetchall()]
+                if 'liability' not in exp_cols:
+                    conn.execute(db.text("ALTER TABLE expenses ADD COLUMN liability VARCHAR(30) DEFAULT 'owner_machine'"))
                 conn.commit()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Migration notice: {e}")
 
         # Seed default settings if empty
         if not Setting.query.first():
@@ -42,11 +99,12 @@ def init_db():
                 driver_name='راننده محترم',
                 plate_number='۱۲ ع ۳۴۵ ایران ۲۱',
                 truck_model='تریلی ولوو FH500',
-                driver_share_percent=20.0
+                driver_share_percent=20.0,
+                driver_share_basis='net',
+                owner_pin='1234'
             )
             db.session.add(default_setting)
             
-            # Add an initial realistic trip so user immediately sees how it works
             sample_trip = Trip(
                 trip_number='101',
                 bill_number='B-89241',
@@ -56,46 +114,38 @@ def init_db():
                 weight_tons=24.5,
                 loading_date='1405/02/01',
                 discharge_date='1405/02/03',
-                total_freight=45000000, # ۴۵ میلیون
-                commission_fee=3000000, # ۳ میلیون کمیسیون
+                total_freight=45000000,
+                commission_fee=3000000,
                 driver_share_percent=20.0,
-                cash_received_by_driver=5000000, # ۵ میلیون نقد دست راننده
+                cash_received_by_driver=5000000,
                 notes='بارگیری و تخلیه به موقع انجام شد.'
             )
-            sample_trip.calculate_shares() # صافی: ۴۲ میلیون -> سهم راننده: ۸.۴ میلیون
+            sample_trip.calculate_shares(basis='net')
             db.session.add(sample_trip)
             db.session.flush()
 
-            # Add sample expenses
             exp1 = Expense(
                 trip_id=sample_trip.id,
                 category='گازوئیل',
                 amount=850000,
-                paid_by='driver', # راننده از جیبش داده
+                paid_by='driver',
+                liability='owner_machine',
                 expense_date='1405/02/02',
-                description='سوخت‌گیری پمپ‌بنزین سیرجان'
+                description='سوخت‌گیری سیرجان'
             )
             exp2 = Expense(
                 trip_id=sample_trip.id,
                 category='عوارض',
                 amount=120000,
                 paid_by='driver',
+                liability='owner_machine',
                 expense_date='1405/02/02',
                 description='عوارضی آزادراه بندر به سیرجان'
             )
-            exp3 = Expense(
-                trip_id=sample_trip.id,
-                category='باسکول',
-                amount=80000,
-                paid_by='driver',
-                expense_date='1405/02/01',
-                description='باسکول مبدا'
-            )
-            db.session.add_all([exp1, exp2, exp3])
+            db.session.add_all([exp1, exp2])
 
-            # Add sample advance payment by owner
             adv = AdvancePayment(
-                amount=2000000, # ۲ میلیون کارت به کارت
+                amount=2000000,
                 payment_date='1405/02/01',
                 payment_method='کارت به کارت',
                 tracking_code='548102',
@@ -104,27 +154,30 @@ def init_db():
             db.session.add(adv)
             
             db.session.commit()
+            record_audit('CREATE', 'Setting', default_setting.id, 'system', 'مقادیر اولیه سیستم با موفقیت ثبت شد.')
 
-# ----------------- Routes -----------------
-
+# ----------------- Static & Web Routes -----------------
 @app.route('/')
 def index():
     return send_from_directory('static', 'index.html')
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    return send_from_directory(app.config['UPLOAD_FOLDER'], secure_filename(filename))
 
-# ----------------- Settings & Auth API -----------------
+# ----------------- Auth & Settings API -----------------
 @app.route('/api/auth/verify-owner-pin', methods=['POST'])
 def verify_owner_pin():
     data = request.json or {}
-    pin = str(data.get('pin', '')).strip()
+    pin = normalize_digits(data.get('pin', ''))
     s = Setting.query.first()
-    correct_pin = str(s.owner_pin if s and s.owner_pin else '1234').strip()
+    correct_pin = normalize_digits(s.owner_pin if s and s.owner_pin else '1234')
     if pin == correct_pin:
+        record_audit('LOGIN', 'Auth', s.id if s else 0, 'owner', 'ورود موفق به پنل مدیریت مالک')
         return jsonify({'status': 'success', 'message': 'رمز عبور صحیح است'})
-    return jsonify({'status': 'error', 'message': 'رمز عبور پنل پدر نادرست است'}), 401
+    
+    record_audit('LOGIN_FAILED', 'Auth', s.id if s else 0, 'driver', 'تلاش ناموفق برای ورود به پنل مالک با رمز اشتباه')
+    return jsonify({'status': 'error', 'message': 'رمز عبور پنل مالک نادرست است'}), 401
 
 @app.route('/api/settings', methods=['GET'])
 def get_settings():
@@ -137,19 +190,26 @@ def get_settings():
 
 @app.route('/api/settings', methods=['POST'])
 def update_settings():
+    actor_role = request.headers.get('X-Role', 'owner')
     s = Setting.query.first()
     if not s:
         s = Setting()
         db.session.add(s)
     data = request.json or {}
-    s.owner_name = data.get('owner_name', s.owner_name)
-    s.driver_name = data.get('driver_name', s.driver_name)
-    s.plate_number = data.get('plate_number', s.plate_number)
-    s.truck_model = data.get('truck_model', s.truck_model)
-    s.driver_share_percent = float(data.get('driver_share_percent', s.driver_share_percent))
-    if 'owner_pin' in data and data['owner_pin']:
-        s.owner_pin = str(data['owner_pin']).strip()
+    
+    s.owner_name = data.get('owner_name', s.owner_name).strip()
+    s.driver_name = data.get('driver_name', s.driver_name).strip()
+    s.plate_number = normalize_digits(data.get('plate_number', s.plate_number)).strip()
+    s.truck_model = data.get('truck_model', s.truck_model).strip()
+    s.driver_share_percent = parse_float_safe(data.get('driver_share_percent'), s.driver_share_percent)
+    s.driver_share_basis = data.get('driver_share_basis', s.driver_share_basis)
+    
+    new_pin = normalize_digits(data.get('owner_pin', '')).strip()
+    if new_pin:
+        s.owner_pin = new_pin
+        
     db.session.commit()
+    record_audit('UPDATE', 'Setting', s.id, actor_role, f"تنظیمات قرارداد و خودرو به‌روزرسانی شد. درصد: {s.driver_share_percent}٪")
     return jsonify({'status': 'success', 'settings': s.to_dict()})
 
 # ----------------- Summary / Dashboard API -----------------
@@ -159,40 +219,31 @@ def get_summary():
     driver_pct = setting.driver_share_percent if setting else 20.0
     role = request.args.get('role', 'driver')
 
-    # بارها و سفرهای تسویه نشده
+    # Unsettled records query with index efficiency
     unsettled_trips = Trip.query.filter_by(is_settled=False).all()
     unsettled_expenses = Expense.query.filter_by(is_settled=False).all()
     unsettled_payments = AdvancePayment.query.filter_by(is_settled=False).all()
 
-    # محاسبات درآمد بارها
     total_freight_unsettled = sum(t.total_freight or 0 for t in unsettled_trips)
     net_freight_unsettled = sum(t.net_freight or 0 for t in unsettled_trips)
     driver_share_unsettled = sum(t.driver_share_amount or 0 for t in unsettled_trips)
     owner_share_unsettled = sum(t.owner_share_amount or 0 for t in unsettled_trips)
-    
-    # پیش‌کرایه‌های نقدی دست راننده
     driver_cash_collected = sum(t.cash_received_by_driver or 0 for t in unsettled_trips)
 
-    # خرج‌های پرداخت شده توسط راننده (طلب راننده از پدر)
+    # Driver expenses (Owner liability paid by driver from pocket -> Credited to Driver)
     driver_paid_expenses = sum(e.amount for e in unsettled_expenses if e.paid_by == 'driver')
-    
-    # خرج‌های پرداخت شده توسط پدر
     owner_paid_expenses = sum(e.amount for e in unsettled_expenses if e.paid_by == 'owner')
-
-    # مساعده‌ها و واریزی‌های پدر به راننده (بدهی راننده)
     advances_paid = sum(p.amount for p in unsettled_payments)
 
-    # فرمول تسویه حساب شفاف:
-    # ۱. طلب راننده: سهم ۲۰٪ از بارها + خرج‌هایی که از جیبش داده
+    # Strict Accounting Formula:
+    # Driver Credit (طلب راننده) = Earned Share + Road Expenses Paid by Driver
     driver_total_credit = driver_share_unsettled + driver_paid_expenses
-    
-    # ۲. بدهی راننده: پیش‌کرایه‌های نقدی که دست راننده است + مساعده‌های واریزی پدر
+    # Driver Debit (بدهی راننده) = Cash collected by Driver on waybills + Advances paid by Owner
     driver_total_debit = driver_cash_collected + advances_paid
-
-    # ۳. مانده نهایی: مثبت = طلب راننده (پدر باید بدهد)، منفی = بدهی راننده (راننده باید به پدر بدهد)
+    # Final Balance (+ Owner owes driver, - Driver owes owner)
     final_balance = driver_total_credit - driver_total_debit
 
-    # اگر درخواست از طرف راننده باشد، سود کل و هزینه‌های مالک را فاش نکنیم
+    # Data Masking for Driver Role (Strict Security & Privacy)
     if role == 'driver':
         return jsonify({
             'role': 'driver',
@@ -207,10 +258,9 @@ def get_summary():
             'final_balance': final_balance
         })
 
-    # آمار کلی همه زمان‌ها (مخصوص پدر / مالک)
+    # Owner Full Analytics
     all_trips = Trip.query.all()
     all_expenses = Expense.query.all()
-    
     total_lifetime_freight = sum(t.net_freight or 0 for t in all_trips)
     total_lifetime_expenses = sum(e.amount for e in all_expenses)
     net_truck_profit = total_lifetime_freight - total_lifetime_expenses
@@ -242,7 +292,7 @@ def get_summary():
 @app.route('/api/trips', methods=['GET'])
 def get_trips():
     status_filter = request.args.get('status', 'all')
-    query = Trip.query.order_by(Trip.id.desc())
+    query = Trip.query.options(joinedload(Trip.expenses)).order_by(Trip.id.desc())
     if status_filter == 'unsettled':
         query = query.filter_by(is_settled=False)
     elif status_filter == 'settled':
@@ -253,60 +303,51 @@ def get_trips():
 @app.route('/api/trips', methods=['POST'])
 def add_trip():
     data = request.json or {}
+    actor_role = request.headers.get('X-Role', 'driver')
     setting = Setting.query.first()
     default_pct = setting.driver_share_percent if setting else 20.0
+    basis = setting.driver_share_basis if setting else 'net'
 
-    pct = float(data.get('driver_share_percent') or default_pct)
+    pct = parse_float_safe(data.get('driver_share_percent'), default_pct)
     trip = Trip(
-        trip_number=data.get('trip_number'),
-        bill_number=data.get('bill_number'),
+        trip_number=normalize_digits(data.get('trip_number')),
+        bill_number=normalize_digits(data.get('bill_number')),
         origin=data.get('origin', '').strip(),
         destination=data.get('destination', '').strip(),
-        cargo_type=data.get('cargo_type'),
-        weight_tons=float(data.get('weight_tons') or 0),
-        loading_date=data.get('loading_date'),
-        discharge_date=data.get('discharge_date'),
-        total_freight=int(data.get('total_freight') or 0),
-        commission_fee=int(data.get('commission_fee') or 0),
+        cargo_type=data.get('cargo_type', '').strip(),
+        weight_tons=parse_float_safe(data.get('weight_tons')),
+        loading_date=normalize_digits(data.get('loading_date')),
+        discharge_date=normalize_digits(data.get('discharge_date')),
+        total_freight=parse_int_safe(data.get('total_freight')),
+        commission_fee=parse_int_safe(data.get('commission_fee')),
         driver_share_percent=pct,
-        cash_received_by_driver=int(data.get('cash_received_by_driver') or 0),
-        notes=data.get('notes')
+        cash_received_by_driver=parse_int_safe(data.get('cash_received_by_driver')),
+        notes=data.get('notes', '').strip()
     )
-    trip.calculate_shares()
+    trip.calculate_shares(basis=basis)
     db.session.add(trip)
     db.session.commit()
-    return jsonify({'status': 'success', 'trip': trip.to_dict()})
-
-@app.route('/api/trips/<int:trip_id>', methods=['PUT'])
-def update_trip(trip_id):
-    trip = Trip.query.get_or_404(trip_id)
-    data = request.json or {}
-    trip.trip_number = data.get('trip_number', trip.trip_number)
-    trip.bill_number = data.get('bill_number', trip.bill_number)
-    trip.origin = data.get('origin', trip.origin)
-    trip.destination = data.get('destination', trip.destination)
-    trip.cargo_type = data.get('cargo_type', trip.cargo_type)
-    trip.weight_tons = float(data.get('weight_tons', trip.weight_tons or 0))
-    trip.loading_date = data.get('loading_date', trip.loading_date)
-    trip.discharge_date = data.get('discharge_date', trip.discharge_date)
-    trip.total_freight = int(data.get('total_freight', trip.total_freight or 0))
-    trip.commission_fee = int(data.get('commission_fee', trip.commission_fee or 0))
-    if 'driver_share_percent' in data:
-        trip.driver_share_percent = float(data['driver_share_percent'])
-    trip.cash_received_by_driver = int(data.get('cash_received_by_driver', trip.cash_received_by_driver or 0))
-    trip.notes = data.get('notes', trip.notes)
-    trip.calculate_shares()
-    db.session.commit()
+    
+    record_audit('CREATE', 'Trip', trip.id, actor_role, f"ثبت بارنامه {trip.bill_number}: {trip.origin} به {trip.destination} (کرایه: {trip.total_freight:,} تومان)")
     return jsonify({'status': 'success', 'trip': trip.to_dict()})
 
 @app.route('/api/trips/<int:trip_id>', methods=['DELETE'])
 def delete_trip(trip_id):
+    actor_role = request.headers.get('X-Role', 'driver')
+    if actor_role != 'owner':
+        return jsonify({'status': 'error', 'message': 'فقط مالک مجاز به حذف بارنامه است.'}), 403
+
     trip = Trip.query.get_or_404(trip_id)
-    # Detach or delete associated expenses
+    if trip.is_settled:
+        return jsonify({'status': 'error', 'message': 'بارنامه‌های تسویه شده قابل حذف نیستند.'}), 400
+
+    info = f"حذف بارنامه {trip.bill_number}: {trip.origin} به {trip.destination}"
     for exp in trip.expenses:
         exp.trip_id = None
     db.session.delete(trip)
     db.session.commit()
+    
+    record_audit('DELETE', 'Trip', trip_id, actor_role, info)
     return jsonify({'status': 'success'})
 
 # ----------------- Expenses API -----------------
@@ -316,6 +357,8 @@ def get_expenses():
     status_filter = request.args.get('status', 'all')
     paid_by_filter = request.args.get('paid_by', 'all')
     query = Expense.query.order_by(Expense.id.desc())
+    
+    # Driver only sees their out-of-pocket expenses
     if role == 'driver':
         query = query.filter_by(paid_by='driver')
     elif paid_by_filter in ['driver', 'owner']:
@@ -331,30 +374,46 @@ def get_expenses():
 @app.route('/api/expenses', methods=['POST'])
 def add_expense():
     data = request.json or {}
+    actor_role = request.headers.get('X-Role', 'driver')
+    
     trip_id = data.get('trip_id')
-    if trip_id == '' or trip_id == 'none':
+    if trip_id in ['', 'none', None]:
         trip_id = None
-    elif trip_id is not None:
-        trip_id = int(trip_id)
+    else:
+        trip_id = parse_int_safe(trip_id)
 
+    paid_by = 'driver' if actor_role == 'driver' else data.get('paid_by', 'driver')
     exp = Expense(
         trip_id=trip_id,
-        category=data.get('category', 'متفرقه'),
-        amount=int(data.get('amount') or 0),
-        paid_by=data.get('paid_by', 'driver'),
-        expense_date=data.get('expense_date'),
-        description=data.get('description'),
+        category=data.get('category', 'متفرقه').strip(),
+        amount=parse_int_safe(data.get('amount')),
+        paid_by=paid_by,
+        liability=data.get('liability', 'owner_machine'),
+        expense_date=normalize_digits(data.get('expense_date')),
+        description=data.get('description', '').strip(),
         receipt_image=data.get('receipt_image')
     )
     db.session.add(exp)
     db.session.commit()
+    
+    record_audit('CREATE', 'Expense', exp.id, actor_role, f"ثبت هزینه {exp.category} به مبلغ {exp.amount:,} تومان (پرداخت: {exp.paid_by})")
     return jsonify({'status': 'success', 'expense': exp.to_dict()})
 
 @app.route('/api/expenses/<int:exp_id>', methods=['DELETE'])
 def delete_expense(exp_id):
+    actor_role = request.headers.get('X-Role', 'driver')
+    if actor_role != 'owner':
+        return jsonify({'status': 'error', 'message': 'فقط مالک مجاز به حذف هزینه است.'}), 403
+
     exp = Expense.query.get_or_404(exp_id)
+    if exp.is_settled:
+        return jsonify({'status': 'error', 'message': 'هزینه‌های تسویه شده قابل حذف نیستند.'}), 400
+
+    info = f"حذف هزینه {exp.category} به مبلغ {exp.amount:,} تومان"
     db.session.delete(exp)
     db.session.commit()
+    
+    record_audit('DELETE', 'Expense', exp_id, actor_role, info)
     return jsonify({'status': 'success'})
 
 # ----------------- Advance Payments API -----------------
@@ -371,24 +430,40 @@ def get_payments():
 
 @app.route('/api/payments', methods=['POST'])
 def add_payment():
+    actor_role = request.headers.get('X-Role', 'driver')
+    if actor_role != 'owner':
+        return jsonify({'status': 'error', 'message': 'فقط مالک مجاز به ثبت واریزی و مساعده است.'}), 403
+
     data = request.json or {}
     pay = AdvancePayment(
-        amount=int(data.get('amount') or 0),
-        payment_date=data.get('payment_date'),
+        amount=parse_int_safe(data.get('amount')),
+        payment_date=normalize_digits(data.get('payment_date')),
         payment_method=data.get('payment_method', 'کارت به کارت'),
-        tracking_code=data.get('tracking_code'),
-        description=data.get('description'),
+        tracking_code=normalize_digits(data.get('tracking_code')),
+        description=data.get('description', '').strip(),
         receipt_image=data.get('receipt_image')
     )
     db.session.add(pay)
     db.session.commit()
+    
+    record_audit('CREATE', 'AdvancePayment', pay.id, actor_role, f"ثبت مساعده به راننده به مبلغ {pay.amount:,} تومان")
     return jsonify({'status': 'success', 'payment': pay.to_dict()})
 
 @app.route('/api/payments/<int:pay_id>', methods=['DELETE'])
 def delete_payment(pay_id):
+    actor_role = request.headers.get('X-Role', 'driver')
+    if actor_role != 'owner':
+        return jsonify({'status': 'error', 'message': 'فقط مالک مجاز به حذف واریزی است.'}), 403
+
     pay = AdvancePayment.query.get_or_404(pay_id)
+    if pay.is_settled:
+        return jsonify({'status': 'error', 'message': 'مساعده‌های تسویه شده قابل حذف نیستند.'}), 400
+
+    info = f"حذف واریزی به مبلغ {pay.amount:,} تومان"
     db.session.delete(pay)
     db.session.commit()
+    
+    record_audit('DELETE', 'AdvancePayment', pay_id, actor_role, info)
     return jsonify({'status': 'success'})
 
 # ----------------- Settlements API -----------------
@@ -399,17 +474,20 @@ def get_settlements():
 
 @app.route('/api/settlements', methods=['POST'])
 def create_settlement():
+    actor_role = request.headers.get('X-Role', 'driver')
+    if actor_role != 'owner':
+        return jsonify({'status': 'error', 'message': 'فقط مالک مجاز به بستن و صدور قطعی تسویه حساب است.'}), 403
+
     data = request.json or {}
-    title = data.get('title') or f"تسویه حساب مورخ {data.get('settlement_date', 'امروز')}"
-    settlement_date = data.get('settlement_date') or datetime.now().strftime('%Y/%m/%d')
+    settlement_date = normalize_digits(data.get('settlement_date')) or datetime.now().strftime('%Y/%m/%d')
+    title = data.get('title') or f"تسویه حساب کارکرد مورخ {settlement_date}"
     
-    # Find all currently unsettled items
     unsettled_trips = Trip.query.filter_by(is_settled=False).all()
     unsettled_expenses = Expense.query.filter_by(is_settled=False).all()
     unsettled_payments = AdvancePayment.query.filter_by(is_settled=False).all()
 
     if not unsettled_trips and not unsettled_expenses and not unsettled_payments:
-        return jsonify({'status': 'error', 'message': 'هیچ موردی برای تسویه حساب وجود ندارد.'}), 400
+        return jsonify({'status': 'error', 'message': 'هیچ رکوردی برای تسویه حساب وجود ندارد.'}), 400
 
     total_net_freight = sum(t.net_freight or 0 for t in unsettled_trips)
     driver_earned_share = sum(t.driver_share_amount or 0 for t in unsettled_trips)
@@ -434,12 +512,11 @@ def create_settlement():
         total_driver_debit=total_driver_debit,
         final_balance=final_balance,
         status='تسویه شده',
-        notes=data.get('notes')
+        notes=data.get('notes', '').strip()
     )
     db.session.add(settlement)
     db.session.flush()
 
-    # Mark all items as settled
     for t in unsettled_trips:
         t.is_settled = True
         t.settlement_id = settlement.id
@@ -451,38 +528,35 @@ def create_settlement():
         p.settlement_id = settlement.id
 
     db.session.commit()
+    record_audit('SETTLE', 'Settlement', settlement.id, actor_role, f"بستن قطعی حساب دوره. مانده نهایی: {final_balance:,} تومان")
     return jsonify({'status': 'success', 'settlement': settlement.to_dict()})
 
-@app.route('/api/settlements/<int:settlement_id>', methods=['GET'])
-def get_settlement_detail(settlement_id):
-    settlement = Settlement.query.get_or_404(settlement_id)
-    trips = [t.to_dict() for t in settlement.trips]
-    expenses = [e.to_dict() for e in settlement.expenses]
-    payments = [p.to_dict() for p in settlement.payments]
-    res = settlement.to_dict()
-    res['trips'] = trips
-    res['expenses'] = expenses
-    res['payments'] = payments
-    return jsonify(res)
+@app.route('/api/audit-logs', methods=['GET'])
+def get_audit_logs():
+    role = request.args.get('role', 'driver')
+    if role != 'owner':
+        return jsonify({'status': 'error', 'message': 'فقط مالک به تاریخچه تغییرات دسترسی دارد.'}), 403
+    logs = AuditLog.query.order_by(AuditLog.id.desc()).limit(100).all()
+    return jsonify([l.to_dict() for l in logs])
 
-# ----------------- File Upload -----------------
+# ----------------- Secure File Upload -----------------
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
         return jsonify({'status': 'error', 'message': 'فایلی انتخاب نشده است'}), 400
     file = request.files['file']
     if file.filename == '':
-        return jsonify({'status': 'error', 'message': 'فایلی انتخاب نشده است'}), 400
+        return jsonify({'status': 'error', 'message': 'نام فایل نامعتبر است'}), 400
     if file and allowed_file(file.filename):
         ext = file.filename.rsplit('.', 1)[1].lower()
         unique_name = f"{uuid.uuid4().hex[:12]}.{ext}"
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_name)
         file.save(filepath)
         return jsonify({'status': 'success', 'filename': unique_name, 'url': f"/uploads/{unique_name}"})
-    return jsonify({'status': 'error', 'message': 'فرمت فایل مجاز نیست'}), 400
+    return jsonify({'status': 'error', 'message': 'فرمت فایل مجاز نیست (فقط تصاویر)'}), 400
 
 if __name__ == '__main__':
     init_db()
     port = int(os.environ.get('PORT', 5000))
-    print(f"Server is running on http://127.0.0.1:{port}")
-    app.run(host='0.0.0.0', port=port, debug=True)
+    print(f"Fleet Accounting Server is running on port {port}")
+    app.run(host='0.0.0.0', port=port, debug=False)
