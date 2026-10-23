@@ -104,6 +104,17 @@
     <!-- 1. DASHBOARD VIEW -->
     <main id="viewDashboard" class="view-section">
       
+      <!-- Pending Verification Notification Banner for Owner -->
+      <div id="dashPendingAlert" style="display:none; margin: 10px 16px 14px 16px; background: #fffbeb; border: 1.5px solid #f59e0b; border-radius: 14px; padding: 12px 14px; font-size: 13px; color: #92400e; cursor: pointer; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);" onclick="switchNav('payments')">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:18px;">🔔</span>
+            <span style="font-weight:800;" id="dashPendingAlertText">۱ واریزی توسط راننده ثبت شده و منتظر تایید شماست</span>
+          </div>
+          <span style="font-size:12px; font-weight:800; background:#f59e0b; color:white; padding:4px 10px; border-radius:8px;">بررسی و تایید ←</span>
+        </div>
+      </div>
+
       <!-- Balance Hero Card -->
       <div class="balance-hero-card">
         <div id="heroTag" class="hero-status-tag status-zero">
@@ -232,11 +243,31 @@
     <!-- 4. ADVANCES (PAYMENTS) VIEW -->
     <main id="viewPayments" class="view-section" style="display:none; padding-top: 16px;">
       <div class="section-header">
-        <div class="section-title">واریزی‌ها و مساعده‌های راننده</div>
+        <div class="section-title">واریزی‌ها و مساعده‌ها</div>
         <button id="btnNewPayment" class="btn-primary" style="width: auto; padding: 6px 14px; font-size: 13px;" onclick="openPaymentModal()">
           + ثبت واریزی
         </button>
       </div>
+
+      <!-- Pending Approval Alert Banner for Owner -->
+      <div id="pendingTransfersAlert" style="display:none; margin: 0 16px 14px 16px; background: #fffbeb; border: 1.5px solid #f59e0b; border-radius: 14px; padding: 12px 14px; font-size: 12px; color: #92400e;">
+        <div style="font-weight:800; display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+          <span>🔔</span>
+          <span id="pendingAlertCountText">واریزی جدید در انتظار تایید شما</span>
+        </div>
+        <div>
+          جهت جلوگیری از ثبت دوبار و محاسبه در مانده حساب نهایی، لطفا فیش واریزی راننده را بررسی و تایید نمایید.
+        </div>
+      </div>
+
+      <!-- Filter tabs -->
+      <div style="display: flex; gap: 8px; padding: 0 16px 14px 16px; overflow-x: auto;">
+        <button class="badge-tag badge-unsettled" style="border:none; cursor:pointer;" onclick="filterPayments('all')">همه واریزی‌ها</button>
+        <button id="tabPendingPayments" class="badge-tag badge-owner" style="border:none; cursor:pointer; background:#fef3c7; color:#b45309;" onclick="filterPayments('pending')">⏳ در انتظار تایید</button>
+        <button class="badge-tag badge-driver" style="border:none; cursor:pointer;" onclick="filterPayments('driver')">واریز راننده به مالک</button>
+        <button class="badge-tag badge-owner" style="border:none; cursor:pointer;" onclick="filterPayments('owner')">مساعده مالک به راننده</button>
+      </div>
+
       <div class="card-list" id="allPaymentsList"></div>
     </main>
 
@@ -459,13 +490,16 @@
             <label class="form-label">نوع تراکنش واریزی *</label>
             <div style="display: flex; gap: 10px;">
               <label style="flex:1; border: 1px solid #cbd5e1; border-radius: 12px; padding: 10px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                <input type="radio" name="payPayerRadio" id="radioPayerOwner" value="owner" checked>
+                <input type="radio" name="payPayerRadio" id="radioPayerOwner" value="owner" checked onchange="handlePayerRadioChange()">
                 <span style="font-size: 12px; font-weight: 700; color: #dc2626;">مساعده به راننده</span>
               </label>
               <label style="flex:1; border: 1px solid #cbd5e1; border-radius: 12px; padding: 10px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                <input type="radio" name="payPayerRadio" id="radioPayerDriver" value="driver">
+                <input type="radio" name="payPayerRadio" id="radioPayerDriver" value="driver" onchange="handlePayerRadioChange()">
                 <span style="font-size: 12px; font-weight: 700; color: #16a34a;">واریز راننده به کارت من</span>
               </label>
+            </div>
+            <div id="ownerDuplicateNotice" style="display:none; background:#fef3c7; border:1px solid #fde68a; border-radius:10px; padding:10px; font-size:12px; color:#92400e; margin-top:8px; line-height:1.5;">
+              ⚠️ <strong>نکته مهم جهت جلوگیری از حساب شدن ۲ باره:</strong> اگر راننده قبلاً این پول را در برنامه‌اش ثبت کرده است، نیازی به ثبت دوباره ندارید! کافیست در لیست واریزی‌ها دکمه «تایید» را بزنید. فقط اگر راننده ثبت نکرده بود، اینجا وارد کنید.
             </div>
           </div>
 
