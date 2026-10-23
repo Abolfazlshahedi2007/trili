@@ -27,6 +27,14 @@ def allowed_file(filename):
 def init_db():
     with app.app_context():
         db.create_all()
+        # Auto-migrate: ensure owner_pin column exists
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(db.text("ALTER TABLE settings ADD COLUMN owner_pin VARCHAR(50) DEFAULT '1234'"))
+                conn.commit()
+        except Exception:
+            pass
+
         # Seed default settings if empty
         if not Setting.query.first():
             default_setting = Setting(
@@ -107,7 +115,17 @@ def index():
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-# ----------------- Settings API -----------------
+# ----------------- Settings & Auth API -----------------
+@app.route('/api/auth/verify-owner-pin', methods=['POST'])
+def verify_owner_pin():
+    data = request.json or {}
+    pin = str(data.get('pin', '')).strip()
+    s = Setting.query.first()
+    correct_pin = str(s.owner_pin if s and s.owner_pin else '1234').strip()
+    if pin == correct_pin:
+        return jsonify({'status': 'success', 'message': 'رمز عبور صحیح است'})
+    return jsonify({'status': 'error', 'message': 'رمز عبور پنل پدر نادرست است'}), 401
+
 @app.route('/api/settings', methods=['GET'])
 def get_settings():
     s = Setting.query.first()
@@ -129,6 +147,8 @@ def update_settings():
     s.plate_number = data.get('plate_number', s.plate_number)
     s.truck_model = data.get('truck_model', s.truck_model)
     s.driver_share_percent = float(data.get('driver_share_percent', s.driver_share_percent))
+    if 'owner_pin' in data and data['owner_pin']:
+        s.owner_pin = str(data['owner_pin']).strip()
     db.session.commit()
     return jsonify({'status': 'success', 'settings': s.to_dict()})
 
@@ -137,6 +157,7 @@ def update_settings():
 def get_summary():
     setting = Setting.query.first()
     driver_pct = setting.driver_share_percent if setting else 20.0
+    role = request.args.get('role', 'driver')
 
     # بارها و سفرهای تسویه نشده
     unsettled_trips = Trip.query.filter_by(is_settled=False).all()
@@ -171,7 +192,22 @@ def get_summary():
     # ۳. مانده نهایی: مثبت = طلب راننده (پدر باید بدهد)، منفی = بدهی راننده (راننده باید به پدر بدهد)
     final_balance = driver_total_credit - driver_total_debit
 
-    # آمار کلی همه زمان‌ها (جهت داشبورد کلی تریلی)
+    # اگر درخواست از طرف راننده باشد، سود کل و هزینه‌های مالک را فاش نکنیم
+    if role == 'driver':
+        return jsonify({
+            'role': 'driver',
+            'driver_percent': driver_pct,
+            'unsettled_trips_count': len(unsettled_trips),
+            'driver_share_unsettled': driver_share_unsettled,
+            'driver_cash_collected': driver_cash_collected,
+            'driver_paid_expenses': driver_paid_expenses,
+            'advances_paid': advances_paid,
+            'driver_total_credit': driver_total_credit,
+            'driver_total_debit': driver_total_debit,
+            'final_balance': final_balance
+        })
+
+    # آمار کلی همه زمان‌ها (مخصوص پدر / مالک)
     all_trips = Trip.query.all()
     all_expenses = Expense.query.all()
     
@@ -180,6 +216,7 @@ def get_summary():
     net_truck_profit = total_lifetime_freight - total_lifetime_expenses
 
     return jsonify({
+        'role': 'owner',
         'driver_percent': driver_pct,
         'unsettled_trips_count': len(unsettled_trips),
         'total_freight_unsettled': total_freight_unsettled,
@@ -275,15 +312,19 @@ def delete_trip(trip_id):
 # ----------------- Expenses API -----------------
 @app.route('/api/expenses', methods=['GET'])
 def get_expenses():
+    role = request.args.get('role', 'driver')
     status_filter = request.args.get('status', 'all')
     paid_by_filter = request.args.get('paid_by', 'all')
     query = Expense.query.order_by(Expense.id.desc())
+    if role == 'driver':
+        query = query.filter_by(paid_by='driver')
+    elif paid_by_filter in ['driver', 'owner']:
+        query = query.filter_by(paid_by=paid_by_filter)
+        
     if status_filter == 'unsettled':
         query = query.filter_by(is_settled=False)
     elif status_filter == 'settled':
         query = query.filter_by(is_settled=True)
-    if paid_by_filter in ['driver', 'owner']:
-        query = query.filter_by(paid_by=paid_by_filter)
     expenses = query.all()
     return jsonify([e.to_dict() for e in expenses])
 

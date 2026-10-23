@@ -12,9 +12,10 @@ class Setting(db.Model):
     plate_number = db.Column(db.String(50), default='۱۲ ع ۳۴۵ ایران ۲۱')
     truck_model = db.Column(db.String(100), default='تریلی کمپرسی / کفی')
     driver_share_percent = db.Column(db.Float, default=20.0)
+    owner_pin = db.Column(db.String(50), default='1234')
 
-    def to_dict(self):
-        return {
+    def to_dict(self, include_pin=False):
+        d = {
             'id': self.id,
             'owner_name': self.owner_name,
             'driver_name': self.driver_name,
@@ -22,6 +23,9 @@ class Setting(db.Model):
             'truck_model': self.truck_model,
             'driver_share_percent': self.driver_share_percent
         }
+        if include_pin:
+            d['owner_pin'] = self.owner_pin
+        return d
 
 
 class Trip(db.Model):
