@@ -143,6 +143,7 @@ class AdvancePayment(db.Model):
     tracking_code = db.Column(db.String(100), nullable=True) # کد پیگیری
     description = db.Column(db.String(255), nullable=True)
     receipt_image = db.Column(db.String(255), nullable=True)
+    is_approved = db.Column(db.Boolean, default=True, index=True) # تایید شده توسط مالک (برای جلوگیری از ثبت دوباره)
     
     is_settled = db.Column(db.Boolean, default=False, index=True)
     settlement_id = db.Column(db.Integer, db.ForeignKey('settlements.id'), nullable=True, index=True)
@@ -158,6 +159,7 @@ class AdvancePayment(db.Model):
             'tracking_code': self.tracking_code,
             'description': self.description,
             'receipt_image': self.receipt_image,
+            'is_approved': True if self.is_approved is None else self.is_approved,
             'is_settled': self.is_settled,
             'settlement_id': self.settlement_id,
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else None

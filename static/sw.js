@@ -1,4 +1,4 @@
-const CACHE_NAME = 'trili-cache-v2';
+const CACHE_NAME = 'trili-cache-v3';
 const ASSETS = [
   '/',
   '/manifest.json',

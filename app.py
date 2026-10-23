@@ -92,6 +92,8 @@ def init_db():
                 pay_cols = [row[1] for row in conn.execute(db.text("PRAGMA table_info(advance_payments)")).fetchall()]
                 if 'payer' not in pay_cols:
                     conn.execute(db.text("ALTER TABLE advance_payments ADD COLUMN payer VARCHAR(20) DEFAULT 'owner'"))
+                if 'is_approved' not in pay_cols:
+                    conn.execute(db.text("ALTER TABLE advance_payments ADD COLUMN is_approved BOOLEAN DEFAULT 1"))
 
                 set_cols = [row[1] for row in conn.execute(db.text("PRAGMA table_info(settlements)")).fetchall()]
                 if 'driver_transfers_to_owner' not in set_cols:
@@ -244,13 +246,17 @@ def get_summary():
     owner_paid_expenses = sum(e.amount for e in unsettled_expenses if e.paid_by == 'owner')
     
     # Two-way payments:
-    # 1. Driver transfers to Owner (واریزی راننده به حساب صاحب ماشین -> بستانکاری راننده)
-    driver_transfers_to_owner = sum(p.amount for p in unsettled_payments if getattr(p, 'payer', 'owner') == 'driver')
+    # 1. Driver transfers to Owner (واریزی راننده به حساب صاحب ماشین -> فقط موارد تایید شده به بستانکاری اضافه می‌شوند)
+    driver_transfers_to_owner = sum(p.amount for p in unsettled_payments if getattr(p, 'payer', 'owner') == 'driver' and getattr(p, 'is_approved', True))
+    pending_driver_transfers_list = [p for p in unsettled_payments if getattr(p, 'payer', 'owner') == 'driver' and not getattr(p, 'is_approved', True)]
+    pending_driver_transfers = sum(p.amount for p in pending_driver_transfers_list)
+    pending_transfers_count = len(pending_driver_transfers_list)
+
     # 2. Advances paid by Owner to Driver (مساعده مالک به راننده -> بدهکاری راننده)
     advances_paid_by_owner = sum(p.amount for p in unsettled_payments if getattr(p, 'payer', 'owner') != 'driver')
 
     # Strict Accounting Formula:
-    # Driver Credit (طلب راننده) = Earned Share + Road Expenses Paid by Driver + Money transferred to Owner
+    # Driver Credit (طلب راننده) = Earned Share + Road Expenses Paid by Driver + Money transferred to Owner (Approved)
     driver_total_credit = driver_share_unsettled + driver_paid_expenses + driver_transfers_to_owner
     # Driver Debit (بدهی راننده) = Cash collected by Driver on waybills + Advances paid by Owner
     driver_total_debit = driver_cash_collected + advances_paid_by_owner
@@ -267,6 +273,8 @@ def get_summary():
             'driver_cash_collected': driver_cash_collected,
             'driver_paid_expenses': driver_paid_expenses,
             'driver_transfers_to_owner': driver_transfers_to_owner,
+            'pending_driver_transfers': pending_driver_transfers,
+            'pending_transfers_count': pending_transfers_count,
             'advances_paid': advances_paid_by_owner,
             'driver_total_credit': driver_total_credit,
             'driver_total_debit': driver_total_debit,
@@ -292,6 +300,8 @@ def get_summary():
         'driver_paid_expenses': driver_paid_expenses,
         'owner_paid_expenses': owner_paid_expenses,
         'driver_transfers_to_owner': driver_transfers_to_owner,
+        'pending_driver_transfers': pending_driver_transfers,
+        'pending_transfers_count': pending_transfers_count,
         'advances_paid': advances_paid_by_owner,
         'driver_total_credit': driver_total_credit,
         'driver_total_debit': driver_total_debit,
@@ -449,33 +459,106 @@ def add_payment():
     actor_role = request.headers.get('X-Role', 'driver')
     data = request.json or {}
     
-    # Determine who paid:
-    # If submitted by driver, payer is ALWAYS 'driver' (واریز راننده به حساب مالک)
-    # If submitted by owner, owner can choose 'owner' (مساعده مالک به راننده) or 'driver' (واریزی راننده به کارت مالک)
+    amount = parse_int_safe(data.get('amount'))
+    payment_date = normalize_digits(data.get('payment_date'))
+    tracking_code = normalize_digits(data.get('tracking_code'))
+    confirm_duplicate = data.get('confirm_duplicate', False)
+
+    # Determine payer and initial approval status:
+    # If submitted by driver: payer is 'driver' and is_approved is False (needs owner verification)
+    # If submitted by owner: owner can enter advances or direct deposits, is_approved is True
     if actor_role == 'driver':
         payer = 'driver'
+        is_approved = False
     else:
         payer = data.get('payer', 'owner')
+        is_approved = True
+
+    # 1. Protection against duplicate tracking code on unsettled payments
+    if tracking_code:
+        existing_by_track = AdvancePayment.query.filter(
+            AdvancePayment.tracking_code == tracking_code,
+            AdvancePayment.is_settled == False
+        ).first()
+        if existing_by_track:
+            if existing_by_track.payer == 'driver' and actor_role == 'owner':
+                return jsonify({
+                    'status': 'error',
+                    'message': f'این واریزی با کد پیگیری {tracking_code} قبلاً توسط راننده در سیستم ثبت شده است. نیازی به ثبت مجدد ندارید؛ کافیست از لیست واریزی‌ها دکمه «تایید» را بزنید تا دوبار در حساب محاسبه نشود.'
+                }), 400
+            else:
+                return jsonify({
+                    'status': 'error',
+                    'message': f'یک واریزی با شماره پیگیری {tracking_code} قبلاً در سیستم ثبت شده است و امکان ثبت دوباره آن وجود ندارد.'
+                }), 400
+
+    # 2. Protection against duplicate amount and date (Warn if same amount was entered)
+    if not confirm_duplicate and amount > 0:
+        match = AdvancePayment.query.filter(
+            AdvancePayment.amount == amount,
+            AdvancePayment.payment_date == payment_date,
+            AdvancePayment.is_settled == False
+        ).first()
+        if match:
+            if match.payer == 'driver' and actor_role == 'owner':
+                msg = f"توجه: یک واریزی با مبلغ {amount:,} تومان در تاریخ {payment_date} قبلاً توسط راننده ثبت شده است.\n\nاگر این همان واریزی است، نیازی به ثبت مجدد ندارید؛ کافیست از لیست واریزی‌ها دکمه «تایید» را بزنید تا دوبار محاسبه نشود.\n\nآیا مطمئن هستید که این یک واریزی دیگر و جداگانه است؟"
+            else:
+                msg = f"توجه: یک واریزی با مبلغ {amount:,} تومان در تاریخ {payment_date} قبلاً در سیستم ثبت شده است.\n\nآیا مطمئن هستید که این یک واریزی دیگر است و می‌خواهید ثبت شود؟"
+            return jsonify({'status': 'duplicate_warning', 'message': msg}), 409
 
     pay = AdvancePayment(
         payer=payer,
-        amount=parse_int_safe(data.get('amount')),
-        payment_date=normalize_digits(data.get('payment_date')),
+        amount=amount,
+        payment_date=payment_date,
         payment_method=data.get('payment_method', 'کارت به کارت'),
-        tracking_code=normalize_digits(data.get('tracking_code')),
+        tracking_code=tracking_code,
         description=data.get('description', '').strip(),
-        receipt_image=data.get('receipt_image')
+        receipt_image=data.get('receipt_image'),
+        is_approved=is_approved
     )
     db.session.add(pay)
     db.session.commit()
     
     if pay.payer == 'driver':
-        log_desc = f"ثبت واریزی راننده به کارت مالک به مبلغ {pay.amount:,} تومان"
+        log_desc = f"ثبت واریزی راننده به کارت مالک به مبلغ {pay.amount:,} تومان (منتظر تایید مالک)"
     else:
         log_desc = f"ثبت مساعده مالک به راننده به مبلغ {pay.amount:,} تومان"
         
     record_audit('CREATE', 'AdvancePayment', pay.id, actor_role, log_desc)
     return jsonify({'status': 'success', 'payment': pay.to_dict()})
+
+@app.route('/api/payments/<int:pay_id>/approve', methods=['POST'])
+def approve_payment(pay_id):
+    actor_role = request.headers.get('X-Role', 'driver')
+    if actor_role != 'owner':
+        return jsonify({'status': 'error', 'message': 'فقط مالک مجاز به تایید دریافت واریزی است.'}), 403
+
+    pay = AdvancePayment.query.get_or_404(pay_id)
+    if pay.is_settled:
+        return jsonify({'status': 'error', 'message': 'این واریزی قبلاً تسویه شده است.'}), 400
+
+    pay.is_approved = True
+    db.session.commit()
+
+    record_audit('APPROVE', 'AdvancePayment', pay.id, actor_role, f"مالک دریافت واریزی {pay.amount:,} تومانی راننده (پیگیری: {pay.tracking_code or '---'}) را تایید کرد.")
+    return jsonify({'status': 'success', 'payment': pay.to_dict()})
+
+@app.route('/api/payments/<int:pay_id>/reject', methods=['POST'])
+def reject_payment(pay_id):
+    actor_role = request.headers.get('X-Role', 'driver')
+    if actor_role != 'owner':
+        return jsonify({'status': 'error', 'message': 'فقط مالک مجاز به رد واریزی است.'}), 403
+
+    pay = AdvancePayment.query.get_or_404(pay_id)
+    if pay.is_settled:
+        return jsonify({'status': 'error', 'message': 'واریزی‌های تسویه شده قابل حذف نیستند.'}), 400
+
+    info = f"رد و ابطال واریزی راننده به مبلغ {pay.amount:,} تومان توسط مالک"
+    db.session.delete(pay)
+    db.session.commit()
+
+    record_audit('REJECT', 'AdvancePayment', pay_id, actor_role, info)
+    return jsonify({'status': 'success'})
 
 @app.route('/api/payments/<int:pay_id>', methods=['DELETE'])
 def delete_payment(pay_id):
@@ -522,8 +605,8 @@ def create_settlement():
     driver_paid_expenses = sum(e.amount for e in unsettled_expenses if e.paid_by == 'driver')
     driver_cash_collected = sum(t.cash_received_by_driver or 0 for t in unsettled_trips)
     
-    # Separate driver transfers to owner from owner advances to driver
-    driver_transfers_to_owner = sum(p.amount for p in unsettled_payments if getattr(p, 'payer', 'owner') == 'driver')
+    # Separate driver transfers to owner from owner advances to driver (ONLY APPROVED TRANSFERS COUNT!)
+    driver_transfers_to_owner = sum(p.amount for p in unsettled_payments if getattr(p, 'payer', 'owner') == 'driver' and getattr(p, 'is_approved', True))
     advances_paid_by_owner = sum(p.amount for p in unsettled_payments if getattr(p, 'payer', 'owner') != 'driver')
 
     total_driver_credit = driver_earned_share + driver_paid_expenses + driver_transfers_to_owner
@@ -556,8 +639,13 @@ def create_settlement():
         e.is_settled = True
         e.settlement_id = settlement.id
     for p in unsettled_payments:
-        p.is_settled = True
-        p.settlement_id = settlement.id
+        if getattr(p, 'is_approved', True):
+            p.is_settled = True
+            p.settlement_id = settlement.id
+
+    db.session.commit()
+    record_audit('SETTLE', 'Settlement', settlement.id, actor_role, f"بستن قطعی حساب دوره. مانده نهایی: {final_balance:,} تومان")
+    return jsonify({'status': 'success', 'settlement': settlement.to_dict()})
 
     db.session.commit()
     record_audit('SETTLE', 'Settlement', settlement.id, actor_role, f"بستن قطعی حساب دوره. مانده نهایی: {final_balance:,} تومان")

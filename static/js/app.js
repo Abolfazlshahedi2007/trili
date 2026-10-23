@@ -12,7 +12,8 @@ let appState = {
   settlements: [],
   activeSettlement: null, // used for preview or detail viewing
   tripsFilter: 'unsettled',
-  expensesFilter: 'all'
+  expensesFilter: 'all',
+  paymentsFilter: 'all'
 };
 
 // --- Persian & Arabic Numeral Normalization ---
@@ -495,6 +496,39 @@ function updateSummaryUI() {
   document.getElementById('dashCashCollected').textContent = '-' + formatToman(sum.driver_cash_collected) + ' ت';
   document.getElementById('dashAdvancesPaid').textContent = '-' + formatToman(sum.advances_paid) + ' ت';
   document.getElementById('dashTripCountBadge').textContent = (sum.unsettled_trips_count || 0) + ' سفر باز';
+
+  // Pending Transfers Notification for Owner
+  const pendingAlert = document.getElementById('dashPendingAlert');
+  const pendingAlertText = document.getElementById('dashPendingAlertText');
+  const pendingListAlert = document.getElementById('pendingTransfersAlert');
+  const pendingAlertCountText = document.getElementById('pendingAlertCountText');
+  const tabPending = document.getElementById('tabPendingPayments');
+
+  const pendingCount = sum.pending_transfers_count || 0;
+  const pendingAmount = sum.pending_driver_transfers || 0;
+
+  if (tabPending) {
+    tabPending.textContent = `⏳ در انتظار تایید (${pendingCount})`;
+    tabPending.style.display = (pendingCount > 0 || appState.role === 'owner') ? 'inline-block' : 'none';
+  }
+
+  if (appState.role === 'owner' && pendingCount > 0) {
+    if (pendingAlert) {
+      pendingAlert.style.display = 'block';
+      if (pendingAlertText) {
+        pendingAlertText.textContent = `${pendingCount} واریزی جدید راننده (${formatToman(pendingAmount)} تومان) منتظر تایید شماست`;
+      }
+    }
+    if (pendingListAlert) {
+      pendingListAlert.style.display = 'block';
+      if (pendingAlertCountText) {
+        pendingAlertCountText.textContent = `${pendingCount} واریزی جدید راننده (${formatToman(pendingAmount)} تومان) در انتظار تایید شما`;
+      }
+    }
+  } else {
+    if (pendingAlert) pendingAlert.style.display = 'none';
+    if (pendingListAlert) pendingListAlert.style.display = 'none';
+  }
 }
 
 function renderDashboard() {
@@ -632,17 +666,25 @@ function renderExpenseCardHTML(e) {
 function renderPaymentCardHTML(p) {
   const isOwner = appState.role === 'owner';
   const isDriverPayer = (p.payer === 'driver');
+  const isApproved = (p.is_approved !== false);
+
+  let statusBadge = '';
+  if (p.is_settled) {
+    statusBadge = '<span class="badge-tag badge-settled">تسویه شده</span>';
+  } else if (!isApproved) {
+    statusBadge = '<span class="badge-tag" style="background:#fef3c7; color:#b45309; border:1px solid #fde68a;">⏳ منتظر تایید پدر</span>';
+  } else {
+    statusBadge = `<span class="badge-tag ${isDriverPayer ? 'badge-driver' : 'badge-owner'}">${isDriverPayer ? 'تایید شده (طلب)' : 'مساعده (بدهی)'}</span>`;
+  }
 
   return `
-    <div class="item-card" style="border-right: 4px solid ${isDriverPayer ? '#10b981' : '#f59e0b'};">
+    <div class="item-card" style="border-right: 4px solid ${!isApproved ? '#f59e0b' : (isDriverPayer ? '#10b981' : '#ef4444')}; ${!isApproved ? 'background:#fffdfa;' : ''}">
       <div class="card-top">
         <div class="card-title" style="color: ${isDriverPayer ? '#059669' : '#b45309'};">
-          <span>${isDriverPayer ? '🟢' : '🔴'}</span>
+          <span>${!isApproved ? '⏳' : (isDriverPayer ? '🟢' : '🔴')}</span>
           <span>${isDriverPayer ? 'واریز راننده به کارت مالک: ' : 'مساعده مالک به راننده: '}<strong>${formatToman(p.amount)} تومان</strong></span>
         </div>
-        <span class="badge-tag ${isDriverPayer ? 'badge-driver' : 'badge-owner'}">
-          ${isDriverPayer ? 'واریز راننده (طلب)' : 'مساعده (بدهی)'}
-        </span>
+        ${statusBadge}
       </div>
 
       <div class="card-body-row">
@@ -652,12 +694,26 @@ function renderPaymentCardHTML(p) {
 
       <div class="card-body-row">
         <span>کد پیگیری: <strong>${p.tracking_code || 'ندارد'}</strong></span>
-        <span>وضعیت: <strong style="color: ${p.is_settled ? '#10b981' : '#f59e0b'};">${p.is_settled ? 'تسویه شده' : 'جاری (تسویه نشده)'}</strong></span>
+        <span>وضعیت حساب: <strong style="color: ${p.is_settled ? '#10b981' : (!isApproved ? '#b45309' : '#059669')};">
+          ${p.is_settled ? 'تسویه شده' : (!isApproved ? '⏳ هنوز در حساب اعمال نشده' : 'اعمال در طلب راننده')}
+        </strong></span>
       </div>
 
       ${p.description ? `
         <div class="card-body-row" style="font-size: 12px; color: #64748b;">
           <span>بابت: ${p.description}</span>
+        </div>
+      ` : ''}
+
+      ${!isApproved && isOwner && !p.is_settled ? `
+        <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:10px; margin:8px 0; font-size:12px; color:#92400e;">
+          🔔 راننده این واریز را ثبت کرده است. پس از چک کردن حساب بانکی‌تان، در صورت صحت تایید فرمایید:
+        </div>
+      ` : ''}
+
+      ${!isApproved && !isOwner && !p.is_settled ? `
+        <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:8px 10px; margin:6px 0; font-size:12px; color:#1e40af;">
+          💡 این واریزی ثبت شده و به محض اینکه پدر دریافت آن را تایید کند، به طلب شما اضافه خواهد شد.
         </div>
       ` : ''}
 
@@ -667,7 +723,15 @@ function renderPaymentCardHTML(p) {
             <span>📷 مشاهده رسید بانکی</span>
           </button>
         ` : ''}
-        ${!p.is_settled && isOwner ? `
+        ${!isApproved && isOwner && !p.is_settled ? `
+          <button class="btn-sm-action" style="background:#10b981; color:white; font-weight:800;" onclick="approvePayment(${p.id})">
+            <span>✅ تایید واریزی</span>
+          </button>
+          <button class="btn-sm-action btn-sm-danger" onclick="rejectPayment(${p.id})">
+            <span>❌ رد و حذف</span>
+          </button>
+        ` : ''}
+        ${!p.is_settled && isOwner && isApproved ? `
           <button class="btn-sm-action btn-sm-danger" onclick="deletePayment(${p.id})">
             <span>🗑️ حذف</span>
           </button>
@@ -772,12 +836,27 @@ function renderExpensesList() {
   }
 }
 
+function filterPayments(type) {
+  appState.paymentsFilter = type;
+  renderPaymentsList();
+}
+
 function renderPaymentsList() {
   const container = document.getElementById('allPaymentsList');
-  if (appState.payments.length === 0) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">💳</div><div class="empty-text">هیچ واریزی ثبت نشده است.</div></div>`;
+  let list = appState.payments;
+
+  if (appState.paymentsFilter === 'pending') {
+    list = list.filter(p => !p.is_settled && p.is_approved === false);
+  } else if (appState.paymentsFilter === 'driver') {
+    list = list.filter(p => p.payer === 'driver');
+  } else if (appState.paymentsFilter === 'owner') {
+    list = list.filter(p => p.payer !== 'driver');
+  }
+
+  if (list.length === 0) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">💳</div><div class="empty-text">هیچ واریزی در این دسته‌بندی یافت نشد.</div></div>`;
   } else {
-    container.innerHTML = appState.payments.map(p => renderPaymentCardHTML(p)).join('');
+    container.innerHTML = list.map(p => renderPaymentCardHTML(p)).join('');
   }
 }
 
@@ -839,22 +918,33 @@ function openPaymentModal() {
   const titleEl = document.getElementById('modalPaymentTitle');
   const noticeEl = document.getElementById('driverPayNotice');
   const ownerSelector = document.getElementById('ownerPaySelector');
+  const duplicateNotice = document.getElementById('ownerDuplicateNotice');
   const submitBtn = document.querySelector('#formPayment button[type="submit"]');
+
+  if (duplicateNotice) duplicateNotice.style.display = 'none';
 
   if (isOwner) {
     if (titleEl) titleEl.textContent = '💳 ثبت واریزی و مساعده';
     if (noticeEl) noticeEl.style.display = 'none';
     if (ownerSelector) ownerSelector.style.display = 'block';
     document.getElementById('radioPayerOwner').checked = true;
-    if (submitBtn) submitBtn.textContent = 'ثبت واریزی در سیستم';
+    if (submitBtn) submitBtn.textContent = 'ثبت در سیستم';
   } else {
     if (titleEl) titleEl.textContent = '💳 ثبت واریز وجه به کارت صاحب‌ماشین (پدر)';
     if (noticeEl) noticeEl.style.display = 'block';
     if (ownerSelector) ownerSelector.style.display = 'none';
-    if (submitBtn) submitBtn.textContent = 'ثبت واریز به کارت پدر';
+    if (submitBtn) submitBtn.textContent = 'ثبت و ارسال فیش برای پدر';
   }
 
   openModal('modalPayment');
+}
+
+function handlePayerRadioChange() {
+  const radioDriver = document.getElementById('radioPayerDriver');
+  const notice = document.getElementById('ownerDuplicateNotice');
+  if (notice && radioDriver) {
+    notice.style.display = radioDriver.checked ? 'block' : 'none';
+  }
 }
 
 function openSettingsModal() {
@@ -888,7 +978,7 @@ function calcTripSharesLive() {
   document.getElementById('liveOwnerShare').textContent = formatToman(ownerShare) + ' تومان';
 }
 
-// --- Submissions With Double-Click Protection ---
+// --- Submissions With Double-Click & Duplicate Protection ---
 async function handleTripSubmit(e) {
   e.preventDefault();
   const submitBtn = e.target.querySelector('button[type="submit"]');
@@ -997,12 +1087,12 @@ async function handleExpenseSubmit(e) {
   }
 }
 
-async function handlePaymentSubmit(e) {
+async function handlePaymentSubmit(e, isDuplicateConfirmed = false) {
   e.preventDefault();
   const submitBtn = e.target.querySelector('button[type="submit"]');
   submitBtn.disabled = true;
   submitBtn.classList.add('btn-loading');
-  submitBtn.textContent = 'در حال ثبت...';
+  submitBtn.textContent = 'در حال بررسی و ثبت...';
 
   let receiptImage = null;
   const fileInput = document.getElementById('payReceiptFile');
@@ -1034,7 +1124,8 @@ async function handlePaymentSubmit(e) {
     payment_method: document.getElementById('payMethod').value,
     tracking_code: normalizeDigits(document.getElementById('payTracking').value),
     description: document.getElementById('payDesc').value.trim(),
-    receipt_image: receiptImage
+    receipt_image: receiptImage,
+    confirm_duplicate: isDuplicateConfirmed
   };
 
   try {
@@ -1046,20 +1137,78 @@ async function handlePaymentSubmit(e) {
       },
       body: JSON.stringify(data)
     });
+
+    // Check for Duplicate Warning (HTTP 409)
+    if (res.status === 409) {
+      const warnData = await res.json();
+      submitBtn.disabled = false;
+      submitBtn.classList.remove('btn-loading');
+      submitBtn.textContent = 'ثبت واریزی';
+      if (confirm(warnData.message)) {
+        return handlePaymentSubmit(e, true);
+      } else {
+        return;
+      }
+    }
+
     const resData = await res.json();
     if (res.ok && resData.status === 'success') {
       closeModal('modalPayment');
       await loadAllData();
-      showToast(payer === 'driver' ? 'واریزی شما به حساب صاحب‌ماشین با موفقیت ثبت شد!' : 'مساعده با موفقیت ثبت شد!');
+      if (appState.role === 'driver') {
+        showToast('واریزی ثبت شد و پس از تایید پدر در حساب اعمال می‌شود.');
+      } else {
+        showToast(payer === 'driver' ? 'واریزی راننده مستقیماً تایید و ثبت شد!' : 'مساعده با موفقیت ثبت شد!');
+      }
     } else {
       alert(resData.message || 'خطا در ثبت واریزی');
     }
   } catch (err) {
-    alert('خطا در ثبت واریزی: ' + err.message);
+    alert('خطا در ارتباط با سرور: ' + err.message);
   } finally {
     submitBtn.disabled = false;
     submitBtn.classList.remove('btn-loading');
     submitBtn.textContent = 'ثبت واریزی';
+  }
+}
+
+// --- Payment Verification Actions for Owner ---
+async function approvePayment(id) {
+  if (appState.role !== 'owner') return;
+  try {
+    const res = await fetch(`/api/payments/${id}/approve`, {
+      method: 'POST',
+      headers: { 'X-Role': 'owner' }
+    });
+    const data = await res.json();
+    if (res.ok && data.status === 'success') {
+      await loadAllData();
+      showToast('واریزی راننده با موفقیت تایید شد و به عنوان طلب او در حساب اعمال گردید.');
+    } else {
+      alert(data.message || 'خطا در تایید واریزی');
+    }
+  } catch (err) {
+    alert('خطا در ارتباط با سرور: ' + err.message);
+  }
+}
+
+async function rejectPayment(id) {
+  if (appState.role !== 'owner') return;
+  if (!confirm('آیا مطمئن هستید که این واریزی به حسابتان نیامده و می‌خواهید آن را رد و حذف کنید؟')) return;
+  try {
+    const res = await fetch(`/api/payments/${id}/reject`, {
+      method: 'POST',
+      headers: { 'X-Role': 'owner' }
+    });
+    const data = await res.json();
+    if (res.ok && data.status === 'success') {
+      await loadAllData();
+      showToast('واریزی رد و از سیستم حذف گردید.');
+    } else {
+      alert(data.message || 'خطا در رد واریزی');
+    }
+  } catch (err) {
+    alert('خطا در ارتباط با سرور: ' + err.message);
   }
 }
 
