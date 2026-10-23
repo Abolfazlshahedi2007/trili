@@ -730,4 +730,53 @@ body {
   gap: 8px;
   cursor: pointer;
   margin-top: 12px;
+  min-height: 48px;
+}
+
+/* Touch Friendly Mobile Requirements (Min 48px) */
+.form-input, .form-select, .btn-primary, .quick-btn {
+  min-height: 48px;
+}
+
+/* Number In Words / Live Currency Helper */
+.currency-word-hint {
+  font-size: 11px;
+  color: #2563eb;
+  font-weight: 600;
+  margin-top: 4px;
+  min-height: 16px;
+  display: block;
+}
+
+/* Double-click Protection / Loading State */
+.btn-loading {
+  opacity: 0.7;
+  pointer-events: none;
+  cursor: not-allowed;
+  position: relative;
+}
+
+/* Audit Log List Styles */
+.audit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 16px;
+}
+
+.audit-item {
+  background: white;
+  border-radius: 12px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.audit-meta {
+  display: flex;
+  justify-content: space-between;
+  color: #64748b;
+  font-size: 11px;
+  margin-bottom: 4px;
 }

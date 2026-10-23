@@ -1,9 +1,8 @@
-// ==========================================
-// حسابدار تریلی و راننده - تفکیک دو پنل مجزا
-// ==========================================
+// =================================================================
+// سیستم مدیریت مالی تریلی و راننده - فرانت‌اند جاوااسکریپت پیشرفته
+// =================================================================
 
 let appState = {
-  // اگر قبلاً در این گوشی رمز پدر وارد شده باشد، در حالت مالک می‌ماند، در غیر این صورت همیشه به طور پیش‌فرض «راننده» است.
   role: localStorage.getItem('trili_role') === 'owner' ? 'owner' : 'driver',
   settings: {},
   summary: {},
@@ -15,21 +14,23 @@ let appState = {
   expensesFilter: 'all'
 };
 
-// --- Shamsi Date Utility ---
-function getTodayShamsi() {
-  try {
-    const today = new Date();
-    const formatter = new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    });
-    const parts = formatter.format(today);
-    const persianToEnglish = (str) => str.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
-    return persianToEnglish(parts);
-  } catch (e) {
-    return '1405/02/01';
+// --- Persian & Arabic Numeral Normalization ---
+function normalizeDigits(val) {
+  if (val === null || val === undefined) return '';
+  let str = String(val);
+  const persianDigits = '۰۱۲۳۴۵۶۷۸۹';
+  const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
+  for (let i = 0; i < 10; i++) {
+    str = str.replaceAll(persianDigits[i], String(i)).replaceAll(arabicDigits[i], String(i));
   }
+  return str.trim();
+}
+
+function parseCleanInt(val) {
+  if (!val) return 0;
+  const clean = normalizeDigits(val).replace(/[,،\s]/g, '');
+  const num = parseInt(clean, 10);
+  return isNaN(num) ? 0 : Math.max(0, num);
 }
 
 // --- Number & Currency Formatting ---
@@ -39,10 +40,97 @@ function formatToman(num) {
   return n.toLocaleString('fa-IR');
 }
 
-// --- Initialize App ---
+// Persian Currency in Words Helper (تومان به حروف)
+function numberToPersianWords(num) {
+  if (!num || num <= 0) return '';
+  if (num >= 1000000000) {
+    const b = (num / 1000000000).toFixed(1).replace('.0', '');
+    return `${b} میلیارد تومان`;
+  }
+  if (num >= 1000000) {
+    const m = (num / 1000000).toFixed(1).replace('.0', '');
+    return `${m} میلیون تومان`;
+  }
+  if (num >= 1000) {
+    const k = (num / 1000).toFixed(0);
+    return `${k} هزار تومان`;
+  }
+  return `${num} تومان`;
+}
+
+// Live 3-digit comma formatter on input
+function handleCurrencyInput(inputEl) {
+  const raw = normalizeDigits(inputEl.value).replace(/[^0-9]/g, '');
+  if (!raw) {
+    inputEl.value = '';
+    updateInputWordHint(inputEl, '');
+    return;
+  }
+  const intVal = parseInt(raw, 10);
+  inputEl.value = intVal.toLocaleString('en-US'); // Standard comma formatting
+  updateInputWordHint(inputEl, numberToPersianWords(intVal));
+}
+
+function updateInputWordHint(inputEl, text) {
+  let hintEl = null;
+  if (inputEl.id === 'tripTotalFreight') hintEl = document.getElementById('hintTripTotal');
+  else if (inputEl.id === 'tripCommission') hintEl = document.getElementById('hintTripComm');
+  else if (inputEl.id === 'tripCashDriver') hintEl = document.getElementById('hintTripCash');
+  else if (inputEl.id === 'expAmount') hintEl = document.getElementById('hintExpAmount');
+  else if (inputEl.id === 'payAmount') hintEl = document.getElementById('hintPayAmount');
+  if (hintEl) hintEl.textContent = text;
+}
+
+// --- Client-Side Image Compression (Saves road bandwidth on 3G/Edge) ---
+function compressImageClientSide(file, maxWidth = 1280, quality = 0.75) {
+  return new Promise((resolve) => {
+    if (!file || !file.type.startsWith('image/')) {
+      return resolve(file);
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob((blob) => {
+          resolve(blob || file);
+        }, 'image/jpeg', quality);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// --- Shamsi Date Utility ---
+function getTodayShamsi() {
+  try {
+    const today = new Date();
+    const formatter = new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    return normalizeDigits(formatter.format(today));
+  } catch (e) {
+    return '1405/02/01';
+  }
+}
+
+// --- App Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW error:', err));
+    navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW notice:', err));
   }
 
   const today = getTodayShamsi();
@@ -70,12 +158,11 @@ async function loadAllData() {
   renderSettlementsList();
 }
 
-// --- Role Management & PIN Security ---
+// --- Role Management & Security ---
 function renderRoleHeaderAndAccess() {
   const isOwner = appState.role === 'owner';
   const s = appState.settings || {};
 
-  // Logo & Titles
   const logoEl = document.getElementById('appLogoBadge');
   const titleEl = document.getElementById('appMainTitle');
   const subEl = document.getElementById('headerSubtitle');
@@ -101,10 +188,10 @@ function renderRoleHeaderAndAccess() {
   } else {
     if (logoEl) logoEl.textContent = '🚛';
     if (titleEl) titleEl.textContent = 'حسابدار تریلی (نسخه راننده)';
-    if (subEl) subEl.textContent = `راننده: ${s.driver_name || 'محترم'} | قرارداد ۲۰٪`;
+    if (subEl) subEl.textContent = `راننده: ${s.driver_name || 'محترم'} | قرارداد ${s.driver_share_percent || 20}٪`;
     if (bannerEl) {
       bannerEl.innerHTML = `
-        <button type="button" onclick="openPinModal()" class="role-tab" style="background: rgba(37, 99, 235, 0.35); border: 1px solid rgba(255, 255, 255, 0.25); color: #fff; font-weight: 700; border-radius: 10px; padding: 7px 12px; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; cursor: pointer;">
+        <button type="button" onclick="openPinModal()" class="role-tab" style="background: rgba(37, 99, 235, 0.35); border: 1px solid rgba(255, 255, 255, 0.25); color: #fff; font-weight: 700; border-radius: 10px; padding: 8px 12px; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; cursor: pointer;">
           <span>🔒</span>
           <span>ورود به پنل مدیریت پدر (نیاز به رمز عبور)</span>
         </button>
@@ -112,7 +199,7 @@ function renderRoleHeaderAndAccess() {
     }
   }
 
-  // Access Control on Action Buttons
+  // Access Control visibility
   const qPay = document.getElementById('quickBtnPayment');
   if (qPay) qPay.style.display = isOwner ? 'flex' : 'none';
 
@@ -128,7 +215,6 @@ function renderRoleHeaderAndAccess() {
   const lblOwnerPaid = document.getElementById('labelPaidByOwner');
   if (lblOwnerPaid) lblOwnerPaid.style.display = isOwner ? 'flex' : 'none';
 
-  // Bottom Navigation Labels
   const navPay = document.getElementById('navPayments');
   if (navPay) navPay.querySelector('span').textContent = isOwner ? 'مساعده‌ها' : 'دریافتی‌ها';
 
@@ -140,11 +226,10 @@ function handlePlateClick() {
   if (appState.role === 'owner') {
     openSettingsModal();
   } else {
-    alert('تنظیمات خودرو و قرارداد فقط در پنل مدیریت پدر در دسترس است.\nاگر شما مالک هستید، لطفاً با زدن دکمه «ورود به پنل مدیریت پدر» در بالای صفحه، رمز خود را وارد کنید.');
+    alert('تنظیمات خودرو و قرارداد فقط در پنل مدیریت پدر در دسترس است.\nبرای دسترسی، لطفاً از دکمه بالا رمز پدر را وارد کنید.');
   }
 }
 
-// PIN Modal
 function openPinModal() {
   document.getElementById('inputOwnerPin').value = '';
   document.getElementById('pinErrorMessage').style.display = 'none';
@@ -154,7 +239,7 @@ function openPinModal() {
 
 async function handlePinLogin(e) {
   e.preventDefault();
-  const pin = document.getElementById('inputOwnerPin').value.trim();
+  const pin = normalizeDigits(document.getElementById('inputOwnerPin').value);
   const errEl = document.getElementById('pinErrorMessage');
   errEl.style.display = 'none';
 
@@ -176,7 +261,7 @@ async function handlePinLogin(e) {
       errEl.style.display = 'block';
     }
   } catch (err) {
-    errEl.textContent = 'خطا در برقراری ارتباط با سرور';
+    errEl.textContent = 'خطا در ارتباط با سرور';
     errEl.style.display = 'block';
   }
 }
@@ -196,7 +281,7 @@ async function fetchSettings() {
     appState.settings = await res.json();
     updateHeaderWithSettings();
   } catch (err) {
-    console.error('Error fetching settings:', err);
+    console.error('Settings error:', err);
   }
 }
 
@@ -206,7 +291,7 @@ async function fetchSummary() {
     appState.summary = await res.json();
     updateSummaryUI();
   } catch (err) {
-    console.error('Error fetching summary:', err);
+    console.error('Summary error:', err);
   }
 }
 
@@ -215,7 +300,7 @@ async function fetchTrips() {
     const res = await fetch('/api/trips');
     appState.trips = await res.json();
   } catch (err) {
-    console.error('Error fetching trips:', err);
+    console.error('Trips error:', err);
   }
 }
 
@@ -224,7 +309,7 @@ async function fetchExpenses() {
     const res = await fetch(`/api/expenses?role=${appState.role}`);
     appState.expenses = await res.json();
   } catch (err) {
-    console.error('Error fetching expenses:', err);
+    console.error('Expenses error:', err);
   }
 }
 
@@ -233,7 +318,7 @@ async function fetchPayments() {
     const res = await fetch('/api/payments');
     appState.payments = await res.json();
   } catch (err) {
-    console.error('Error fetching payments:', err);
+    console.error('Payments error:', err);
   }
 }
 
@@ -242,7 +327,7 @@ async function fetchSettlements() {
     const res = await fetch('/api/settlements');
     appState.settlements = await res.json();
   } catch (err) {
-    console.error('Error fetching settlements:', err);
+    console.error('Settlements error:', err);
   }
 }
 
@@ -278,28 +363,27 @@ function updateSummaryUI() {
   if (balance > 0) {
     tagEl.className = 'hero-status-tag status-credit';
     if (isDriver) {
-      tagEl.innerHTML = '🟢 طلب شما از صاحب‌ماشین';
-      descEl.textContent = 'این مبلغ مجموع طلب شما (سهم بارها + خرج‌های مسیر) منهای دریافتی‌هاست که باید به شما پرداخت شود.';
+      tagEl.innerHTML = '🟢 طلب شما از صاحب‌ماشین (بستانکار)';
+      descEl.textContent = 'این مبلغ حاصل سهم ۲۰٪ بارها و مخارج پرداختی مسیر توسط شما است که باید پرداخت شود.';
     } else {
       tagEl.innerHTML = '🟢 بدهی شما به راننده (طلب راننده)';
-      descEl.textContent = 'شما (مالک) باید این مبلغ را در زمان تسویه به راننده پرداخت نمایید.';
+      descEl.textContent = 'شما (مالک) باید این مبلغ را در زمان تسویه حساب به راننده پرداخت نمایید.';
     }
   } else if (balance < 0) {
     tagEl.className = 'hero-status-tag status-debit';
     if (isDriver) {
-      tagEl.innerHTML = '🔴 بدهی شما به صاحب‌ماشین';
-      descEl.textContent = 'مجموع پیش‌کرایه‌های نقدی و مساعده‌های دریافتی بیشتر از سهم شما بوده و این مبلغ دست شماست.';
+      tagEl.innerHTML = '🔴 بدهی شما به صاحب‌ماشین (بدهکار)';
+      descEl.textContent = 'مجموع پیش‌کرایه‌ها و مساعده‌های دریافتی بیشتر از سهم شما بوده و پول دست شماست.';
     } else {
       tagEl.innerHTML = '🔴 طلب شما از راننده (بدهی راننده)';
-      descEl.textContent = 'راننده این مبلغ پول اضافه در دست دارد که باید در زمان تسویه به شما بازگرداند.';
+      descEl.textContent = 'راننده این مبلغ اضافه را در دست دارد که باید به شما برگرداند.';
     }
   } else {
     tagEl.className = 'hero-status-tag status-zero';
-    tagEl.innerHTML = '🔵 حساب کاملاً تراز و صفر است';
-    descEl.textContent = 'تمامی بارها و خرج‌ها تسویه شده و هیچ مانده حسابی وجود ندارد.';
+    tagEl.innerHTML = '🔵 حساب کاملاً تراز و صفر است (تسویه کامل)';
+    descEl.textContent = 'تمامی بارها و خرج‌ها کاملاً تسویه شده و هیچ مانده حسابی وجود ندارد.';
   }
 
-  // Breakdown metrics
   document.getElementById('dashDriverShare').textContent = formatToman(sum.driver_share_unsettled) + ' ت';
   document.getElementById('dashDriverExpenses').textContent = '+' + formatToman(sum.driver_paid_expenses) + ' ت';
   document.getElementById('dashCashCollected').textContent = '-' + formatToman(sum.driver_cash_collected) + ' ت';
@@ -326,7 +410,7 @@ function renderDashboard() {
   if (unsettledExpenses.length === 0) {
     expContainer.innerHTML = `
       <div class="empty-state" style="padding: 20px;">
-        <div class="empty-text">هیچ خرجی برای این دوره ثبت نشده است.</div>
+        <div class="empty-text">هیچ هزینه ثبت‌نشده‌ای برای این دوره وجود ندارد.</div>
       </div>
     `;
   } else {
@@ -334,7 +418,7 @@ function renderDashboard() {
   }
 }
 
-// --- Cards HTML Generators ---
+// --- Card HTML Renderers ---
 function renderTripCardHTML(t) {
   const isSettled = t.is_settled;
   const isOwner = appState.role === 'owner';
@@ -589,7 +673,7 @@ function renderSettlementsList() {
   }
 }
 
-// --- Modals ---
+// --- Modals Control ---
 function openModal(id) {
   document.getElementById(id).classList.add('active');
 }
@@ -600,6 +684,9 @@ function closeModal(id) {
 function openTripModal() {
   document.getElementById('formTrip').reset();
   document.getElementById('tripLoadingDate').value = getTodayShamsi();
+  document.getElementById('hintTripTotal').textContent = '';
+  document.getElementById('hintTripComm').textContent = '';
+  document.getElementById('hintTripCash').textContent = '';
   calcTripSharesLive();
   openModal('modalTrip');
 }
@@ -607,8 +694,8 @@ function openTripModal() {
 function openExpenseModal() {
   document.getElementById('formExpense').reset();
   document.getElementById('expDate').value = getTodayShamsi();
+  document.getElementById('hintExpAmount').textContent = '';
 
-  // If driver, force 'driver'
   if (appState.role === 'driver') {
     document.getElementById('radioPaidByDriver').checked = true;
     document.getElementById('labelPaidByOwner').style.display = 'none';
@@ -628,11 +715,12 @@ function openExpenseModal() {
 
 function openPaymentModal() {
   if (appState.role !== 'owner') {
-    alert('فقط مالک (پدر) مجاز به ثبت واریزی و مساعده است.');
+    alert('فقط مالک مجاز به ثبت واریزی و مساعده است.');
     return;
   }
   document.getElementById('formPayment').reset();
   document.getElementById('payDate').value = getTodayShamsi();
+  document.getElementById('hintPayAmount').textContent = '';
   openModal('modalPayment');
 }
 
@@ -643,72 +731,98 @@ function openSettingsModal() {
   document.getElementById('settingPlate').value = s.plate_number || '';
   document.getElementById('settingModel').value = s.truck_model || '';
   document.getElementById('settingDriverPct').value = s.driver_share_percent || 20;
+  if (document.getElementById('settingDriverBasis')) {
+    document.getElementById('settingDriverBasis').value = s.driver_share_basis || 'net';
+  }
   document.getElementById('settingOwnerPin').value = '';
   openModal('modalSettings');
 }
 
 function calcTripSharesLive() {
-  const total = parseInt(document.getElementById('tripTotalFreight').value) || 0;
-  const commission = parseInt(document.getElementById('tripCommission').value) || 0;
+  const total = parseCleanInt(document.getElementById('tripTotalFreight').value);
+  const commission = parseCleanInt(document.getElementById('tripCommission').value);
   const net = Math.max(0, total - commission);
   
   const pct = (appState.settings && appState.settings.driver_share_percent) ? appState.settings.driver_share_percent : 20.0;
-  const driverShare = Math.round(net * (pct / 100.0));
-  const ownerShare = net - driverShare;
+  const basis = (appState.settings && appState.settings.driver_share_basis) ? appState.settings.driver_share_basis : 'net';
+  
+  const baseAmount = basis === 'gross' ? total : net;
+  const driverShare = Math.round(baseAmount * (pct / 100.0));
+  const ownerShare = Math.max(0, net - driverShare);
 
   document.getElementById('liveNetFreight').textContent = formatToman(net) + ' تومان';
   document.getElementById('liveDriverShare').textContent = formatToman(driverShare) + ' تومان';
   document.getElementById('liveOwnerShare').textContent = formatToman(ownerShare) + ' تومان';
 }
 
-// --- Submissions ---
+// --- Double-Click Protected Submissions ---
 async function handleTripSubmit(e) {
   e.preventDefault();
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.classList.add('btn-loading');
+  submitBtn.textContent = 'در حال ذخیره...';
+
   const data = {
-    origin: document.getElementById('tripOrigin').value,
-    destination: document.getElementById('tripDestination').value,
-    bill_number: document.getElementById('tripBillNumber').value,
-    loading_date: document.getElementById('tripLoadingDate').value,
-    cargo_type: document.getElementById('tripCargo').value,
-    weight_tons: document.getElementById('tripWeight').value,
-    total_freight: document.getElementById('tripTotalFreight').value,
-    commission_fee: document.getElementById('tripCommission').value,
-    cash_received_by_driver: document.getElementById('tripCashDriver').value,
-    notes: document.getElementById('tripNotes').value
+    origin: document.getElementById('tripOrigin').value.trim(),
+    destination: document.getElementById('tripDestination').value.trim(),
+    bill_number: normalizeDigits(document.getElementById('tripBillNumber').value),
+    loading_date: normalizeDigits(document.getElementById('tripLoadingDate').value),
+    cargo_type: document.getElementById('tripCargo').value.trim(),
+    weight_tons: parseFloat(document.getElementById('tripWeight').value) || 0,
+    total_freight: parseCleanInt(document.getElementById('tripTotalFreight').value),
+    commission_fee: parseCleanInt(document.getElementById('tripCommission').value),
+    cash_received_by_driver: parseCleanInt(document.getElementById('tripCashDriver').value),
+    notes: document.getElementById('tripNotes').value.trim()
   };
 
   try {
     const res = await fetch('/api/trips', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Role': appState.role
+      },
       body: JSON.stringify(data)
     });
     if (res.ok) {
       closeModal('modalTrip');
       await loadAllData();
       alert('بارنامه با موفقیت ثبت شد!');
+    } else {
+      const err = await res.json();
+      alert(err.message || 'خطا در ثبت بارنامه');
     }
   } catch (err) {
-    alert('خطا در ثبت بارنامه: ' + err.message);
+    alert('خطا در برقراری ارتباط: ' + err.message);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.classList.remove('btn-loading');
+    submitBtn.textContent = 'ذخیره بارنامه';
   }
 }
 
 async function handleExpenseSubmit(e) {
   e.preventDefault();
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.classList.add('btn-loading');
+  submitBtn.textContent = 'در حال ارسال و بهینه‌سازی...';
   
   let receiptImage = null;
   const fileInput = document.getElementById('expReceiptFile');
   if (fileInput.files.length > 0) {
-    const formData = new FormData();
-    formData.append('file', fileInput.files[0]);
     try {
+      const compressedBlob = await compressImageClientSide(fileInput.files[0]);
+      const formData = new FormData();
+      formData.append('file', compressedBlob, 'receipt.jpg');
       const upRes = await fetch('/api/upload', { method: 'POST', body: formData });
       const upData = await upRes.json();
       if (upData.status === 'success') {
         receiptImage = upData.filename;
       }
     } catch (err) {
-      console.warn('File upload failed:', err);
+      console.warn('Image compression/upload failed:', err);
     }
   }
 
@@ -716,71 +830,105 @@ async function handleExpenseSubmit(e) {
   const data = {
     trip_id: document.getElementById('expTripId').value,
     category: document.getElementById('expCategory').value,
-    amount: document.getElementById('expAmount').value,
+    amount: parseCleanInt(document.getElementById('expAmount').value),
     paid_by: paidBy,
-    expense_date: document.getElementById('expDate').value,
-    description: document.getElementById('expDesc').value,
+    liability: 'owner_machine',
+    expense_date: normalizeDigits(document.getElementById('expDate').value),
+    description: document.getElementById('expDesc').value.trim(),
     receipt_image: receiptImage
   };
 
   try {
     const res = await fetch('/api/expenses', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Role': appState.role
+      },
       body: JSON.stringify(data)
     });
     if (res.ok) {
       closeModal('modalExpense');
       await loadAllData();
       alert('هزینه با موفقیت ثبت شد!');
+    } else {
+      const err = await res.json();
+      alert(err.message || 'خطا در ثبت هزینه');
     }
   } catch (err) {
     alert('خطا در ثبت هزینه: ' + err.message);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.classList.remove('btn-loading');
+    submitBtn.textContent = 'ثبت هزینه';
   }
 }
 
 async function handlePaymentSubmit(e) {
   e.preventDefault();
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.classList.add('btn-loading');
+  submitBtn.textContent = 'در حال ذخیره...';
+
   const data = {
-    amount: document.getElementById('payAmount').value,
-    payment_date: document.getElementById('payDate').value,
+    amount: parseCleanInt(document.getElementById('payAmount').value),
+    payment_date: normalizeDigits(document.getElementById('payDate').value),
     payment_method: document.getElementById('payMethod').value,
-    tracking_code: document.getElementById('payTracking').value,
-    description: document.getElementById('payDesc').value
+    tracking_code: normalizeDigits(document.getElementById('payTracking').value),
+    description: document.getElementById('payDesc').value.trim()
   };
 
   try {
     const res = await fetch('/api/payments', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Role': appState.role
+      },
       body: JSON.stringify(data)
     });
     if (res.ok) {
       closeModal('modalPayment');
       await loadAllData();
       alert('واریزی با موفقیت ثبت شد!');
+    } else {
+      const err = await res.json();
+      alert(err.message || 'خطا در ثبت واریزی');
     }
   } catch (err) {
     alert('خطا در ثبت واریزی: ' + err.message);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.classList.remove('btn-loading');
+    submitBtn.textContent = 'ثبت واریزی';
   }
 }
 
 async function handleSettingsSubmit(e) {
   e.preventDefault();
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'در حال ذخیره...';
+
   const data = {
-    owner_name: document.getElementById('settingOwner').value,
-    driver_name: document.getElementById('settingDriver').value,
-    plate_number: document.getElementById('settingPlate').value,
-    truck_model: document.getElementById('settingModel').value,
-    driver_share_percent: document.getElementById('settingDriverPct').value
+    owner_name: document.getElementById('settingOwner').value.trim(),
+    driver_name: document.getElementById('settingDriver').value.trim(),
+    plate_number: normalizeDigits(document.getElementById('settingPlate').value),
+    truck_model: document.getElementById('settingModel').value.trim(),
+    driver_share_percent: parseFloat(document.getElementById('settingDriverPct').value) || 20.0,
+    driver_share_basis: document.getElementById('settingDriverBasis').value
   };
-  const pinVal = document.getElementById('settingOwnerPin').value.trim();
+  const pinVal = normalizeDigits(document.getElementById('settingOwnerPin').value);
   if (pinVal) data.owner_pin = pinVal;
 
   try {
     const res = await fetch('/api/settings', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Role': appState.role
+      },
       body: JSON.stringify(data)
     });
     if (res.ok) {
@@ -790,6 +938,9 @@ async function handleSettingsSubmit(e) {
     }
   } catch (err) {
     alert('خطا در ذخیره تنظیمات: ' + err.message);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'ذخیره تنظیمات';
   }
 }
 
@@ -797,21 +948,21 @@ async function handleSettingsSubmit(e) {
 async function deleteTrip(id) {
   if (appState.role !== 'owner') return;
   if (!confirm('آیا از حذف این بارنامه مطمئن هستید؟')) return;
-  await fetch(`/api/trips/${id}`, { method: 'DELETE' });
+  await fetch(`/api/trips/${id}`, { method: 'DELETE', headers: { 'X-Role': 'owner' } });
   await loadAllData();
 }
 
 async function deleteExpense(id) {
   if (appState.role !== 'owner') return;
   if (!confirm('آیا از حذف این هزینه مطمئن هستید؟')) return;
-  await fetch(`/api/expenses/${id}`, { method: 'DELETE' });
+  await fetch(`/api/expenses/${id}`, { method: 'DELETE', headers: { 'X-Role': 'owner' } });
   await loadAllData();
 }
 
 async function deletePayment(id) {
   if (appState.role !== 'owner') return;
   if (!confirm('آیا از حذف این واریزی مطمئن هستید؟')) return;
-  await fetch(`/api/payments/${id}`, { method: 'DELETE' });
+  await fetch(`/api/payments/${id}`, { method: 'DELETE', headers: { 'X-Role': 'owner' } });
   await loadAllData();
 }
 
@@ -820,7 +971,34 @@ function viewReceiptImage(filename) {
   openModal('modalImage');
 }
 
-// --- Settlement & Invoice Preview ---
+// --- Audit Log Viewer Modal ---
+async function openAuditModal() {
+  if (appState.role !== 'owner') return;
+  openModal('modalAuditLogs');
+  const container = document.getElementById('auditLogContent');
+  container.innerHTML = `<div class="empty-state">در حال فراخوانی لاگ‌ها...</div>`;
+  try {
+    const res = await fetch('/api/audit-logs?role=owner');
+    const logs = await res.json();
+    if (!logs || logs.length === 0) {
+      container.innerHTML = `<div class="empty-state">هیچ رویدادی ثبت نشده است.</div>`;
+      return;
+    }
+    container.innerHTML = logs.map(l => `
+      <div class="audit-item">
+        <div class="audit-meta">
+          <span>📅 ${l.created_at || '---'}</span>
+          <span>نقش: <strong>${l.actor_role === 'owner' ? '👑 مالک' : (l.actor_role === 'driver' ? '🧢 راننده' : 'سیستم')}</strong></span>
+        </div>
+        <div style="font-weight: 600; color: #1e293b;">${l.details || l.action}</div>
+      </div>
+    `).join('');
+  } catch (err) {
+    container.innerHTML = `<div class="empty-state" style="color:red;">خطا در دریافت لاگ‌ها</div>`;
+  }
+}
+
+// --- Settlements & WhatsApp Invoice ---
 function openSettlementPreviewModal() {
   const sum = appState.summary;
   const s = appState.settings;
@@ -878,14 +1056,14 @@ function shareInvoiceWhatsApp() {
   }
 
   const text = `
-📋 *صورت‌حساب شفاف تسویه تریلی*
+📋 *صورت‌حساب رسمی کارکرد تریلی*
 🚛 پلاک: ${s.plate_number} (${s.truck_model})
 👤 مالک: ${s.owner_name}
 🧢 راننده: ${s.driver_name}
 📅 تاریخ: ${today}
 ━━━━━━━━━━━━━━━━━━
 🔹 *بخش اول: بستانکاری راننده (طلب)*
-• سهم ${s.driver_share_percent}٪ از کرایه صافی بارها: ${formatToman(sum.driver_share_unsettled)} تومان
+• سهم ${s.driver_share_percent}٪ از کرایه بارها: ${formatToman(sum.driver_share_unsettled)} تومان
 • خرج‌های مسیر پرداختی از جیب راننده: ${formatToman(sum.driver_paid_expenses)} تومان
 ➕ *جمع طلب راننده: ${formatToman(sum.driver_total_credit)} تومان*
 
@@ -897,7 +1075,7 @@ function shareInvoiceWhatsApp() {
 📊 *مانده نهایی تسویه:*
 ${conclusion}
 ━━━━━━━━━━━━━━━━━━
-_تولید شده توسط نرم‌افزار حسابدار تریلی_
+_تولید شده توسط سیستم حسابدار تریلی_
   `.trim();
 
   const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
@@ -906,7 +1084,7 @@ _تولید شده توسط نرم‌افزار حسابدار تریلی_
 
 async function confirmAndExecuteSettlement() {
   if (appState.role !== 'owner') {
-    alert('فقط مالک (پدر) مجاز به ثبت قطعی تسویه حساب است.');
+    alert('فقط مالک مجاز به ثبت قطعی تسویه حساب است.');
     return;
   }
   if (!confirm('آیا از ثبت قطعی تسویه حساب این دوره اطمینان دارید؟ تمام بارها و خرج‌های فعلی بسته شده و مانده برای دوره بعدی صفر خواهد شد.')) return;
@@ -915,7 +1093,10 @@ async function confirmAndExecuteSettlement() {
   try {
     const res = await fetch('/api/settlements', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Role': 'owner'
+      },
       body: JSON.stringify({
         title: `تسویه حساب مورخ ${today}`,
         settlement_date: today

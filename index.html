@@ -269,12 +269,14 @@
           <!-- Financials -->
           <div class="form-group">
             <label class="form-label">کرایه کل بارنامه (تومان) *</label>
-            <input type="number" id="tripTotalFreight" class="form-input" placeholder="مثلاً ۴۰,۰۰۰,۰۰۰" oninput="calcTripSharesLive()" required>
+            <input type="text" inputmode="numeric" id="tripTotalFreight" class="form-input currency-input" placeholder="مثلاً ۴۰,۰۰۰,۰۰۰" oninput="handleCurrencyInput(this); calcTripSharesLive();" required>
+            <span id="hintTripTotal" class="currency-word-hint"></span>
           </div>
 
           <div class="form-group">
             <label class="form-label">کمیسیون پایانه / باربری (تومان)</label>
-            <input type="number" id="tripCommission" class="form-input" placeholder="مثلاً ۲,۵۰۰,۰۰۰" oninput="calcTripSharesLive()">
+            <input type="text" inputmode="numeric" id="tripCommission" class="form-input currency-input" placeholder="مثلاً ۲,۵۰۰,۰۰۰" oninput="handleCurrencyInput(this); calcTripSharesLive();">
+            <span id="hintTripComm" class="currency-word-hint"></span>
             <div class="form-hint">کمیسیون از کرایه کل کم می‌شود تا کرایه صافی به دست بیاید.</div>
           </div>
 
@@ -285,18 +287,19 @@
               <strong id="liveNetFreight">۰ تومان</strong>
             </div>
             <div class="live-calc-row" style="font-weight: 800; color: #16a34a;">
-              <span>سهم راننده (۲۰٪):</span>
+              <span>سهم راننده:</span>
               <strong id="liveDriverShare">۰ تومان</strong>
             </div>
             <div class="live-calc-row">
-              <span>سهم پدر (۸۰٪):</span>
+              <span>سهم پدر (مالک):</span>
               <strong id="liveOwnerShare">۰ تومان</strong>
             </div>
           </div>
 
           <div class="form-group">
             <label class="form-label">پیش‌کرایه یا پس‌کرایه نقدی دست راننده (تومان)</label>
-            <input type="number" id="tripCashDriver" class="form-input" placeholder="مبلغی که راننده نقداً از بار دریافت کرده">
+            <input type="text" inputmode="numeric" id="tripCashDriver" class="form-input currency-input" placeholder="مبلغی که راننده نقداً دریافت کرده" oninput="handleCurrencyInput(this)">
+            <span id="hintTripCash" class="currency-word-hint"></span>
             <div class="form-hint">این مبلغ از طلب راننده در زمان تسویه کسر می‌شود.</div>
           </div>
 
@@ -343,7 +346,8 @@
 
           <div class="form-group">
             <label class="form-label">مبلغ هزینه (تومان) *</label>
-            <input type="number" id="expAmount" class="form-input" placeholder="مثلاً ۷۵۰,۰۰۰" required>
+            <input type="text" inputmode="numeric" id="expAmount" class="form-input currency-input" placeholder="مثلاً ۷۵۰,۰۰۰" oninput="handleCurrencyInput(this)" required>
+            <span id="hintExpAmount" class="currency-word-hint"></span>
           </div>
 
           <div class="form-group" id="expPaidByGroup">
@@ -392,7 +396,8 @@
         <form id="formPayment" onsubmit="handlePaymentSubmit(event)">
           <div class="form-group">
             <label class="form-label">مبلغ واریز شده (تومان) *</label>
-            <input type="number" id="payAmount" class="form-input" placeholder="مثلاً ۵,۰۰۰,۰۰۰" required>
+            <input type="text" inputmode="numeric" id="payAmount" class="form-input currency-input" placeholder="مثلاً ۵,۰۰۰,۰۰۰" oninput="handleCurrencyInput(this)" required>
+            <span id="hintPayAmount" class="currency-word-hint"></span>
           </div>
 
           <div class="form-row">
@@ -523,9 +528,16 @@
             <input type="text" id="settingModel" class="form-input" placeholder="ولوو اف‌اچ ۵۰۰">
           </div>
           <div class="form-group">
-            <label class="form-label">درصد سهم راننده از کرایه صافی (درصد)</label>
+            <label class="form-label">درصد سهم راننده (درصد)</label>
             <input type="number" step="0.5" id="settingDriverPct" class="form-input" value="20" required>
-            <div class="form-hint">طبق توافق شما، پیش‌فرض ۲۰٪ از کرایه صافی است.</div>
+            <div class="form-hint">طبق توافق، پیش‌فرض ۲۰٪ است.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">مبنای محاسبه درصد راننده</label>
+            <select id="settingDriverBasis" class="form-select">
+              <option value="net">درصد از کرایه صافی (کل منهای کمیسیون باربری - استاندارد)</option>
+              <option value="gross">درصد از کل کرایه ناخالص بارنامه</option>
+            </select>
           </div>
           <div class="form-group">
             <label class="form-label">رمز عبور ورود به پنل مدیریت پدر (پین‌کد)</label>
@@ -533,7 +545,27 @@
             <div class="form-hint">این رمز را در اختیار راننده قرار ندهید تا پنل شما کاملاً مجزا و امن بماند.</div>
           </div>
           <button type="submit" class="btn-primary">ذخیره تنظیمات</button>
+          
+          <div style="margin-top: 16px; border-top: 1px solid #f1f5f9; padding-top: 14px; text-align: center;">
+            <button type="button" class="btn-sm-action" style="margin: 0 auto; color: #2563eb;" onclick="openAuditModal()">
+              <span>📜</span>
+              <span>مشاهده تاریخچه و لاگ تغییرات سیستم (Audit Trail)</span>
+            </button>
+          </div>
         </form>
+      </div>
+    </div>
+
+    <!-- MODAL: AUDIT TRAIL LOGS -->
+    <div class="modal-overlay" id="modalAuditLogs">
+      <div class="modal-sheet">
+        <div class="modal-header">
+          <div class="modal-title">📜 تاریخچه و لاگ تغییرات سیستم</div>
+          <button class="modal-close-btn" onclick="closeModal('modalAuditLogs')">✕</button>
+        </div>
+        <div id="auditLogContent" class="audit-list">
+          <div class="empty-state">در حال بارگذاری لاگ‌ها...</div>
+        </div>
       </div>
     </div>
 
