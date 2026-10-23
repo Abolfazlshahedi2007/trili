@@ -3,13 +3,14 @@
 // =================================================================
 
 let appState = {
-  role: localStorage.getItem('trili_role') === 'owner' ? 'owner' : 'driver',
+  role: localStorage.getItem('trili_role') || null, // null means user must choose role on Login screen
   settings: {},
   summary: {},
   trips: [],
   expenses: [],
   payments: [],
   settlements: [],
+  activeSettlement: null, // used for preview or detail viewing
   tripsFilter: 'unsettled',
   expensesFilter: 'all'
 };
@@ -81,6 +82,17 @@ function updateInputWordHint(inputEl, text) {
   if (hintEl) hintEl.textContent = text;
 }
 
+// --- Toast Notification Helper ---
+function showToast(msg, duration = 3000) {
+  const toast = document.getElementById('appToast');
+  if (!toast) return;
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => {
+    toast.classList.remove('show');
+  }, duration);
+}
+
 // --- Client-Side Image Compression (Saves road bandwidth on 3G/Edge) ---
 function compressImageClientSide(file, maxWidth = 1280, quality = 0.75) {
   return new Promise((resolve) => {
@@ -138,10 +150,97 @@ document.addEventListener('DOMContentLoaded', () => {
   if (document.getElementById('expDate')) document.getElementById('expDate').value = today;
   if (document.getElementById('payDate')) document.getElementById('payDate').value = today;
 
-  loadAllData();
+  const isAuth = checkAuthState();
+  if (isAuth) {
+    loadAllData();
+  }
 });
 
+// --- Authentication & Role Switching Flow ---
+function checkAuthState() {
+  const isAuth = !!appState.role;
+  const loginView = document.getElementById('viewLogin');
+  const bottomNav = document.querySelector('.bottom-nav');
+  const bannerEl = document.getElementById('roleStatusBanner');
+
+  if (!isAuth) {
+    if (loginView) loginView.style.display = 'flex';
+    if (bottomNav) bottomNav.style.display = 'none';
+
+    // Hide all main content views
+    ['Dashboard', 'Trips', 'Expenses', 'Payments', 'Settlements'].forEach(v => {
+      const el = document.getElementById(`view${v}`);
+      if (el) el.style.display = 'none';
+    });
+
+    const logoEl = document.getElementById('appLogoBadge');
+    const titleEl = document.getElementById('appMainTitle');
+    const subEl = document.getElementById('headerSubtitle');
+    if (logoEl) logoEl.textContent = '🚛';
+    if (titleEl) titleEl.textContent = 'سامانه حسابداری تریلی';
+    if (subEl) subEl.textContent = 'صفحه ورود و انتخاب نقش';
+    if (bannerEl) bannerEl.innerHTML = '';
+    return false;
+  }
+
+  if (loginView) loginView.style.display = 'none';
+  if (bottomNav) bottomNav.style.display = 'flex';
+  renderRoleHeaderAndAccess();
+  return true;
+}
+
+function loginAsDriver() {
+  appState.role = 'driver';
+  localStorage.setItem('trili_role', 'driver');
+  checkAuthState();
+  switchNav('dashboard');
+  loadAllData();
+  showToast('خوش آمدید! وارد پنل راننده شدید.');
+}
+
+async function handleOwnerLoginDirect(e) {
+  e.preventDefault();
+  const pinInput = document.getElementById('loginOwnerPin');
+  const pin = normalizeDigits(pinInput.value);
+  const errEl = document.getElementById('loginPinError');
+  errEl.style.display = 'none';
+
+  try {
+    const res = await fetch('/api/auth/verify-owner-pin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin })
+    });
+    const data = await res.json();
+    if (res.ok && data.status === 'success') {
+      appState.role = 'owner';
+      localStorage.setItem('trili_role', 'owner');
+      pinInput.value = '';
+      checkAuthState();
+      switchNav('dashboard');
+      loadAllData();
+      showToast('خوش آمدید! وارد پنل مدیریت پدر شدید.');
+    } else {
+      errEl.textContent = data.message || 'رمز عبور نادرست است!';
+      errEl.style.display = 'block';
+    }
+  } catch (err) {
+    errEl.textContent = 'خطا در ارتباط با سرور';
+    errEl.style.display = 'block';
+  }
+}
+
+function logoutToLoginScreen() {
+  if (confirm('آیا می‌خواهید از این پنل خارج شده و به صفحه انتخاب نقش بازگردید؟')) {
+    appState.role = null;
+    localStorage.removeItem('trili_role');
+    checkAuthState();
+    showToast('از حساب کاربری خارج شدید.');
+  }
+}
+
 async function loadAllData() {
+  if (!appState.role) return;
   renderRoleHeaderAndAccess();
   await Promise.all([
     fetchSettings(),
@@ -158,8 +257,9 @@ async function loadAllData() {
   renderSettlementsList();
 }
 
-// --- Role Management & Security ---
+// --- Role Management & Header Access Bar ---
 function renderRoleHeaderAndAccess() {
+  if (!appState.role) return;
   const isOwner = appState.role === 'owner';
   const s = appState.settings || {};
 
@@ -179,35 +279,49 @@ function renderRoleHeaderAndAccess() {
             <span>👑</span>
             <span>پنل مدیریت مالک فعال است</span>
           </div>
-          <button type="button" onclick="logoutOwner()" class="role-tab" style="flex: 1; background: rgba(239, 68, 68, 0.25); color: #fca5a5; font-size: 12px; border: 1px solid rgba(239,68,68,0.3); cursor: pointer; border-radius: 9px; padding: 6px 0;">
+          <button type="button" onclick="logoutToLoginScreen()" class="role-tab" style="flex: 1; background: rgba(239, 68, 68, 0.25); color: #fca5a5; font-size: 12px; border: 1px solid rgba(239,68,68,0.3); cursor: pointer; border-radius: 9px; padding: 6px 0;">
             🚪 خروج
           </button>
         </div>
       `;
     }
   } else {
-    if (logoEl) logoEl.textContent = '🚛';
+    if (logoEl) logoEl.textContent = '🧢';
     if (titleEl) titleEl.textContent = 'حسابدار تریلی (نسخه راننده)';
     if (subEl) subEl.textContent = `راننده: ${s.driver_name || 'محترم'} | قرارداد ${s.driver_share_percent || 20}٪`;
     if (bannerEl) {
       bannerEl.innerHTML = `
-        <button type="button" onclick="openPinModal()" class="role-tab" style="background: rgba(37, 99, 235, 0.35); border: 1px solid rgba(255, 255, 255, 0.25); color: #fff; font-weight: 700; border-radius: 10px; padding: 8px 12px; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; cursor: pointer;">
-          <span>🔒</span>
-          <span>ورود به پنل مدیریت پدر (نیاز به رمز عبور)</span>
-        </button>
+        <div style="display: flex; gap: 8px; width: 100%; align-items: center;">
+          <button type="button" onclick="openPinModal()" class="role-tab" style="flex: 2; background: rgba(37, 99, 235, 0.35); border: 1px solid rgba(255, 255, 255, 0.25); color: #fff; font-weight: 700; border-radius: 10px; padding: 8px 12px; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer;">
+            <span>🔒</span>
+            <span>ورود به پنل مدیریت پدر</span>
+          </button>
+          <button type="button" onclick="logoutToLoginScreen()" class="role-tab" style="flex: 1; background: rgba(148, 163, 184, 0.2); color: #e2e8f0; font-size: 12px; border: 1px solid rgba(255,255,255,0.15); cursor: pointer; border-radius: 10px; padding: 8px 0;">
+            🔄 تغییر نقش
+          </button>
+        </div>
       `;
     }
   }
 
-  // Access Control visibility
+  // Quick Action Payment Button: Visible for BOTH roles!
   const qPay = document.getElementById('quickBtnPayment');
-  if (qPay) qPay.style.display = isOwner ? 'flex' : 'none';
+  if (qPay) {
+    qPay.style.display = 'flex';
+    const qPayLabel = qPay.querySelector('span');
+    if (qPayLabel) qPayLabel.textContent = isOwner ? 'ثبت واریزی / مساعده' : 'ثبت واریزی به کارت پدر';
+  }
 
+  // Settlement CTA Button: Only Owner can settle
   const setBox = document.getElementById('dashSettlementContainer');
   if (setBox) setBox.style.display = isOwner ? 'block' : 'none';
 
+  // New Payment Button in Payments view: Visible for BOTH roles!
   const btnNewPay = document.getElementById('btnNewPayment');
-  if (btnNewPay) btnNewPay.style.display = isOwner ? 'block' : 'none';
+  if (btnNewPay) {
+    btnNewPay.style.display = 'block';
+    btnNewPay.textContent = isOwner ? '+ ثبت واریزی / مساعده' : '+ واریز به کارت پدر';
+  }
 
   const btnNewSet = document.getElementById('btnNewSettlement');
   if (btnNewSet) btnNewSet.style.display = isOwner ? 'block' : 'none';
@@ -216,7 +330,7 @@ function renderRoleHeaderAndAccess() {
   if (lblOwnerPaid) lblOwnerPaid.style.display = isOwner ? 'flex' : 'none';
 
   const navPay = document.getElementById('navPayments');
-  if (navPay) navPay.querySelector('span').textContent = isOwner ? 'مساعده‌ها' : 'دریافتی‌ها';
+  if (navPay) navPay.querySelector('span').textContent = 'واریزی‌ها';
 
   const navSet = document.getElementById('navSettlements');
   if (navSet) navSet.querySelector('span').textContent = isOwner ? 'تسویه‌ها' : 'صورت‌حساب‌ها';
@@ -255,7 +369,7 @@ async function handlePinLogin(e) {
       localStorage.setItem('trili_role', 'owner');
       closeModal('modalPinLogin');
       await loadAllData();
-      alert('خوش آمدید! وارد پنل مدیریت پدر شدید.');
+      showToast('خوش آمدید! وارد پنل مدیریت پدر شدید.');
     } else {
       errEl.textContent = data.message || 'رمز عبور نادرست است!';
       errEl.style.display = 'block';
@@ -263,14 +377,6 @@ async function handlePinLogin(e) {
   } catch (err) {
     errEl.textContent = 'خطا در ارتباط با سرور';
     errEl.style.display = 'block';
-  }
-}
-
-function logoutOwner() {
-  if (confirm('آیا می‌خواهید از پنل مدیریت پدر خارج شده و به پنل راننده برگردید؟')) {
-    appState.role = 'driver';
-    localStorage.removeItem('trili_role');
-    loadAllData();
   }
 }
 
@@ -364,7 +470,7 @@ function updateSummaryUI() {
     tagEl.className = 'hero-status-tag status-credit';
     if (isDriver) {
       tagEl.innerHTML = '🟢 طلب شما از صاحب‌ماشین (بستانکار)';
-      descEl.textContent = 'این مبلغ حاصل سهم ۲۰٪ بارها و مخارج پرداختی مسیر توسط شما است که باید پرداخت شود.';
+      descEl.textContent = 'این مبلغ حاصل سهم ۲۰٪ بارها، مخارج مسیر و واریزی‌های شما به کارت پدر است که باید دریافت کنید.';
     } else {
       tagEl.innerHTML = '🟢 بدهی شما به راننده (طلب راننده)';
       descEl.textContent = 'شما (مالک) باید این مبلغ را در زمان تسویه حساب به راننده پرداخت نمایید.';
@@ -448,79 +554,72 @@ function renderTripCardHTML(t) {
       <div class="card-highlight-box">
         <div>
           <div class="highlight-label">کرایه صافی بار:</div>
-          <div style="font-weight:700; font-size:13px; color:#475569;">${formatToman(t.net_freight)} تومان</div>
+          <div style="font-size: 15px; font-weight: 800; color: #1e293b;">
+            ${formatToman(t.net_freight)} تومان
+          </div>
         </div>
         <div style="text-align: left;">
-          <div class="highlight-label">سهم راننده (${t.driver_share_percent}٪):</div>
-          <div class="highlight-value">${formatToman(t.driver_share_amount)} تومان</div>
+          <div class="highlight-label">سهم ۲۰٪ راننده:</div>
+          <div style="font-size: 16px; font-weight: 900; color: #16a34a;">
+            ${formatToman(t.driver_share_amount)} تومان
+          </div>
         </div>
       </div>
 
       ${t.cash_received_by_driver > 0 ? `
-        <div class="card-body-row" style="margin-top: 8px; color: #b45309; background: #fffbeb; padding: 6px 10px; border-radius: 8px;">
-          <span>💵 پیش‌کرایه نقدی دست راننده:</span>
-          <strong>${formatToman(t.cash_received_by_driver)} تومان</strong>
+        <div class="card-body-row" style="color: #dc2626; font-size: 12px; font-weight: 700;">
+          <span>پیش‌کرایه نقدی دست راننده:</span>
+          <span>-${formatToman(t.cash_received_by_driver)} تومان</span>
         </div>
       ` : ''}
 
-      ${!isSettled && isOwner ? `
-        <div class="card-footer-actions">
+      <div class="card-footer-actions">
+        <span style="font-size: 12px; color: #64748b;">تاریخ: ${t.loading_date || 'ثبت شده'}</span>
+        ${!isSettled && isOwner ? `
           <button class="btn-sm-action btn-sm-danger" onclick="deleteTrip(${t.id})">
-            <span>🗑️ حذف بارنامه</span>
+            <span>🗑️ حذف</span>
           </button>
-        </div>
-      ` : ''}
+        ` : ''}
+      </div>
     </div>
   `;
 }
 
 function renderExpenseCardHTML(e) {
   const isDriverPaid = e.paid_by === 'driver';
+  const isSettled = e.is_settled;
   const isOwner = appState.role === 'owner';
-
-  const categoryIcons = {
-    'گازوئیل': '⛽',
-    'عوارض': '🛣️',
-    'باسکول': '⚖️',
-    'انعام': '🤝',
-    'پنچری': '🛞',
-    'روغن': '🛢️',
-    'تعمیرات': '🔧',
-    'جریمه': '⚠️',
-    'متفرقه': '📝'
-  };
-  const icon = categoryIcons[e.category] || '💸';
 
   return `
     <div class="item-card">
       <div class="card-top">
         <div class="card-title">
-          <span>${icon}</span>
-          <span>${e.category} - ${formatToman(e.amount)} تومان</span>
+          <span>⛽</span>
+          <span>${e.category}: ${formatToman(e.amount)} تومان</span>
         </div>
         <span class="badge-tag ${isDriverPaid ? 'badge-driver' : 'badge-owner'}">
-          ${isDriverPaid ? 'پرداخت: راننده (طلب)' : 'پرداخت: پدر'}
+          ${isDriverPaid ? 'پرداخت راننده (طلب)' : 'پرداخت پدر'}
         </span>
       </div>
 
       <div class="card-body-row">
-        <span>مربوط به: <strong>${e.trip_title || 'خرج عمومی ماشین'}</strong></span>
-        <span>تاریخ: <strong>${e.expense_date || '---'}</strong></span>
+        <span>تاریخ: <strong>${e.expense_date || 'امروز'}</strong></span>
+        <span>مسئولیت: <strong>${e.liability === 'owner_machine' ? 'پای صاحب ماشین' : 'مشترک'}</strong></span>
       </div>
 
       ${e.description ? `
         <div class="card-body-row" style="font-size: 12px; color: #64748b;">
-          <span>شرح: ${e.description}</span>
+          <span>توضیح: ${e.description}</span>
         </div>
       ` : ''}
 
       <div class="card-footer-actions">
         ${e.receipt_image ? `
           <button class="btn-sm-action" onclick="viewReceiptImage('${e.receipt_image}')">
-            <span>📷 مشاهده رسید</span>
+            <span>📷 مشاهده فاکتور</span>
           </button>
         ` : ''}
-        ${!e.is_settled && isOwner ? `
+        ${!isSettled && isOwner ? `
           <button class="btn-sm-action btn-sm-danger" onclick="deleteExpense(${e.id})">
             <span>🗑️ حذف</span>
           </button>
@@ -532,19 +631,28 @@ function renderExpenseCardHTML(e) {
 
 function renderPaymentCardHTML(p) {
   const isOwner = appState.role === 'owner';
+  const isDriverPayer = (p.payer === 'driver');
+
   return `
-    <div class="item-card">
+    <div class="item-card" style="border-right: 4px solid ${isDriverPayer ? '#10b981' : '#f59e0b'};">
       <div class="card-top">
-        <div class="card-title" style="color: #047857;">
-          <span>💳</span>
-          <span>واریزی: ${formatToman(p.amount)} تومان</span>
+        <div class="card-title" style="color: ${isDriverPayer ? '#059669' : '#b45309'};">
+          <span>${isDriverPayer ? '🟢' : '🔴'}</span>
+          <span>${isDriverPayer ? 'واریز راننده به کارت مالک: ' : 'مساعده مالک به راننده: '}<strong>${formatToman(p.amount)} تومان</strong></span>
         </div>
-        <span class="badge-tag badge-settled">${p.payment_method || 'کارت به کارت'}</span>
+        <span class="badge-tag ${isDriverPayer ? 'badge-driver' : 'badge-owner'}">
+          ${isDriverPayer ? 'واریز راننده (طلب)' : 'مساعده (بدهی)'}
+        </span>
       </div>
 
       <div class="card-body-row">
-        <span>تاریخ واریز: <strong>${p.payment_date || '---'}</strong></span>
-        <span>پیگیری: <strong>${p.tracking_code || '---'}</strong></span>
+        <span>تاریخ: <strong>${p.payment_date || '---'}</strong></span>
+        <span>روش: <strong>${p.payment_method || 'کارت به کارت'}</strong></span>
+      </div>
+
+      <div class="card-body-row">
+        <span>کد پیگیری: <strong>${p.tracking_code || 'ندارد'}</strong></span>
+        <span>وضعیت: <strong style="color: ${p.is_settled ? '#10b981' : '#f59e0b'};">${p.is_settled ? 'تسویه شده' : 'جاری (تسویه نشده)'}</strong></span>
       </div>
 
       ${p.description ? `
@@ -553,13 +661,18 @@ function renderPaymentCardHTML(p) {
         </div>
       ` : ''}
 
-      ${!p.is_settled && isOwner ? `
-        <div class="card-footer-actions">
+      <div class="card-footer-actions">
+        ${p.receipt_image ? `
+          <button class="btn-sm-action" onclick="viewReceiptImage('${p.receipt_image}')">
+            <span>📷 مشاهده رسید بانکی</span>
+          </button>
+        ` : ''}
+        ${!p.is_settled && isOwner ? `
           <button class="btn-sm-action btn-sm-danger" onclick="deletePayment(${p.id})">
             <span>🗑️ حذف</span>
           </button>
-        </div>
-      ` : ''}
+        ` : ''}
+      </div>
     </div>
   `;
 }
@@ -584,6 +697,10 @@ function renderSettlementCardHTML(s) {
 
       <div class="card-body-row">
         <span>خرج‌های راننده: <strong>+${formatToman(s.driver_paid_expenses)} ت</strong></span>
+        <span>واریزی‌های راننده: <strong>+${formatToman(s.driver_transfers_to_owner || 0)} ت</strong></span>
+      </div>
+
+      <div class="card-body-row">
         <span>مساعده‌ها و پیش‌کرایه: <strong>-${formatToman(s.total_driver_debit)} ت</strong></span>
       </div>
 
@@ -714,13 +831,29 @@ function openExpenseModal() {
 }
 
 function openPaymentModal() {
-  if (appState.role !== 'owner') {
-    alert('فقط مالک مجاز به ثبت واریزی و مساعده است.');
-    return;
-  }
   document.getElementById('formPayment').reset();
   document.getElementById('payDate').value = getTodayShamsi();
   document.getElementById('hintPayAmount').textContent = '';
+
+  const isOwner = appState.role === 'owner';
+  const titleEl = document.getElementById('modalPaymentTitle');
+  const noticeEl = document.getElementById('driverPayNotice');
+  const ownerSelector = document.getElementById('ownerPaySelector');
+  const submitBtn = document.querySelector('#formPayment button[type="submit"]');
+
+  if (isOwner) {
+    if (titleEl) titleEl.textContent = '💳 ثبت واریزی و مساعده';
+    if (noticeEl) noticeEl.style.display = 'none';
+    if (ownerSelector) ownerSelector.style.display = 'block';
+    document.getElementById('radioPayerOwner').checked = true;
+    if (submitBtn) submitBtn.textContent = 'ثبت واریزی در سیستم';
+  } else {
+    if (titleEl) titleEl.textContent = '💳 ثبت واریز وجه به کارت صاحب‌ماشین (پدر)';
+    if (noticeEl) noticeEl.style.display = 'block';
+    if (ownerSelector) ownerSelector.style.display = 'none';
+    if (submitBtn) submitBtn.textContent = 'ثبت واریز به کارت پدر';
+  }
+
   openModal('modalPayment');
 }
 
@@ -755,7 +888,7 @@ function calcTripSharesLive() {
   document.getElementById('liveOwnerShare').textContent = formatToman(ownerShare) + ' تومان';
 }
 
-// --- Double-Click Protected Submissions ---
+// --- Submissions With Double-Click Protection ---
 async function handleTripSubmit(e) {
   e.preventDefault();
   const submitBtn = e.target.querySelector('button[type="submit"]');
@@ -788,7 +921,7 @@ async function handleTripSubmit(e) {
     if (res.ok) {
       closeModal('modalTrip');
       await loadAllData();
-      alert('بارنامه با موفقیت ثبت شد!');
+      showToast('بارنامه با موفقیت ثبت شد!');
     } else {
       const err = await res.json();
       alert(err.message || 'خطا در ثبت بارنامه');
@@ -811,7 +944,7 @@ async function handleExpenseSubmit(e) {
   
   let receiptImage = null;
   const fileInput = document.getElementById('expReceiptFile');
-  if (fileInput.files.length > 0) {
+  if (fileInput && fileInput.files.length > 0) {
     try {
       const compressedBlob = await compressImageClientSide(fileInput.files[0]);
       const formData = new FormData();
@@ -850,7 +983,7 @@ async function handleExpenseSubmit(e) {
     if (res.ok) {
       closeModal('modalExpense');
       await loadAllData();
-      alert('هزینه با موفقیت ثبت شد!');
+      showToast('هزینه با موفقیت ثبت شد!');
     } else {
       const err = await res.json();
       alert(err.message || 'خطا در ثبت هزینه');
@@ -869,14 +1002,39 @@ async function handlePaymentSubmit(e) {
   const submitBtn = e.target.querySelector('button[type="submit"]');
   submitBtn.disabled = true;
   submitBtn.classList.add('btn-loading');
-  submitBtn.textContent = 'در حال ذخیره...';
+  submitBtn.textContent = 'در حال ثبت...';
+
+  let receiptImage = null;
+  const fileInput = document.getElementById('payReceiptFile');
+  if (fileInput && fileInput.files.length > 0) {
+    try {
+      const compressedBlob = await compressImageClientSide(fileInput.files[0]);
+      const formData = new FormData();
+      formData.append('file', compressedBlob, 'payment_receipt.jpg');
+      const upRes = await fetch('/api/upload', { method: 'POST', body: formData });
+      const upData = await upRes.json();
+      if (upData.status === 'success') {
+        receiptImage = upData.filename;
+      }
+    } catch (err) {
+      console.warn('Receipt upload notice:', err);
+    }
+  }
+
+  let payer = 'driver';
+  if (appState.role === 'owner') {
+    const radio = document.querySelector('input[name="payPayerRadio"]:checked');
+    payer = radio ? radio.value : 'owner';
+  }
 
   const data = {
+    payer: payer,
     amount: parseCleanInt(document.getElementById('payAmount').value),
     payment_date: normalizeDigits(document.getElementById('payDate').value),
     payment_method: document.getElementById('payMethod').value,
     tracking_code: normalizeDigits(document.getElementById('payTracking').value),
-    description: document.getElementById('payDesc').value.trim()
+    description: document.getElementById('payDesc').value.trim(),
+    receipt_image: receiptImage
   };
 
   try {
@@ -888,13 +1046,13 @@ async function handlePaymentSubmit(e) {
       },
       body: JSON.stringify(data)
     });
-    if (res.ok) {
+    const resData = await res.json();
+    if (res.ok && resData.status === 'success') {
       closeModal('modalPayment');
       await loadAllData();
-      alert('واریزی با موفقیت ثبت شد!');
+      showToast(payer === 'driver' ? 'واریزی شما به حساب صاحب‌ماشین با موفقیت ثبت شد!' : 'مساعده با موفقیت ثبت شد!');
     } else {
-      const err = await res.json();
-      alert(err.message || 'خطا در ثبت واریزی');
+      alert(resData.message || 'خطا در ثبت واریزی');
     }
   } catch (err) {
     alert('خطا در ثبت واریزی: ' + err.message);
@@ -934,7 +1092,7 @@ async function handleSettingsSubmit(e) {
     if (res.ok) {
       closeModal('modalSettings');
       await loadAllData();
-      alert('تنظیمات با موفقیت ذخیره شد!');
+      showToast('تنظیمات با موفقیت ذخیره شد!');
     }
   } catch (err) {
     alert('خطا در ذخیره تنظیمات: ' + err.message);
@@ -950,6 +1108,7 @@ async function deleteTrip(id) {
   if (!confirm('آیا از حذف این بارنامه مطمئن هستید؟')) return;
   await fetch(`/api/trips/${id}`, { method: 'DELETE', headers: { 'X-Role': 'owner' } });
   await loadAllData();
+  showToast('بارنامه حذف گردید.');
 }
 
 async function deleteExpense(id) {
@@ -957,6 +1116,7 @@ async function deleteExpense(id) {
   if (!confirm('آیا از حذف این هزینه مطمئن هستید؟')) return;
   await fetch(`/api/expenses/${id}`, { method: 'DELETE', headers: { 'X-Role': 'owner' } });
   await loadAllData();
+  showToast('هزینه حذف گردید.');
 }
 
 async function deletePayment(id) {
@@ -964,6 +1124,7 @@ async function deletePayment(id) {
   if (!confirm('آیا از حذف این واریزی مطمئن هستید؟')) return;
   await fetch(`/api/payments/${id}`, { method: 'DELETE', headers: { 'X-Role': 'owner' } });
   await loadAllData();
+  showToast('واریزی حذف گردید.');
 }
 
 function viewReceiptImage(filename) {
@@ -998,18 +1159,20 @@ async function openAuditModal() {
   }
 }
 
-// --- Settlements & WhatsApp Invoice ---
+// --- Settlements & WhatsApp / Clipboard Invoice ---
 function openSettlementPreviewModal() {
+  appState.activeSettlement = null;
   const sum = appState.summary;
-  const s = appState.settings;
+  const s = appState.settings || {};
   const today = getTodayShamsi();
 
-  document.getElementById('invTruckInfo').textContent = `پلاک: ${s.plate_number || '---'} | مالک: ${s.owner_name} | راننده: ${s.driver_name}`;
+  document.getElementById('invTruckInfo').textContent = `پلاک: ${s.plate_number || '---'} | مالک: ${s.owner_name || ''} | راننده: ${s.driver_name || ''}`;
   document.getElementById('invDate').textContent = `تاریخ تسویه: ${today}`;
   document.getElementById('invSharePercent').textContent = `${s.driver_share_percent || 20}٪`;
 
   document.getElementById('invDriverShare').textContent = formatToman(sum.driver_share_unsettled) + ' تومان';
   document.getElementById('invDriverExpenses').textContent = formatToman(sum.driver_paid_expenses) + ' تومان';
+  document.getElementById('invDriverTransfers').textContent = formatToman(sum.driver_transfers_to_owner || 0) + ' تومان';
   document.getElementById('invTotalCredit').textContent = formatToman(sum.driver_total_credit) + ' تومان';
 
   document.getElementById('invCashCollected').textContent = formatToman(sum.driver_cash_collected) + ' تومان';
@@ -1021,7 +1184,7 @@ function openSettlementPreviewModal() {
   const labelEl = document.getElementById('invBalanceLabel');
   const concEl = document.getElementById('invConclusionText');
 
-  balanceEl.textContent = formatToman(balance) + ' تومان';
+  balanceEl.textContent = formatToman(Math.abs(balance)) + ' تومان';
 
   if (balance > 0) {
     labelEl.textContent = 'مبلغ قابل پرداخت توسط مالک به راننده:';
@@ -1030,54 +1193,192 @@ function openSettlementPreviewModal() {
   } else if (balance < 0) {
     labelEl.textContent = 'مبلغ اضافه دست راننده (قابل بازگشت به مالک):';
     balanceEl.style.color = '#dc2626';
-    concEl.textContent = `راننده مبلغ (${formatToman(balance)} تومان) بیشتر از سهم و مخارجش در دست دارد و باید به مالک پرداخت نماید.`;
+    concEl.textContent = `راننده مبلغ (${formatToman(Math.abs(balance))} تومان) بیشتر از سهم و مخارجش در دست دارد و باید به مالک پرداخت نماید.`;
   } else {
     labelEl.textContent = 'مانده نهایی تسویه:';
     balanceEl.style.color = '#2563eb';
     concEl.textContent = 'حساب دو طرف کاملاً تراز و صفر است.';
   }
 
+  // Show confirm settlement button if owner
+  const confirmBtn = document.getElementById('btnConfirmSettlement');
+  if (confirmBtn) confirmBtn.style.display = (appState.role === 'owner') ? 'flex' : 'none';
+
   openModal('modalSettlement');
 }
 
-function shareInvoiceWhatsApp() {
-  const sum = appState.summary;
-  const s = appState.settings;
-  const today = getTodayShamsi();
-  const balance = sum.final_balance || 0;
+function showSettlementDetail(id) {
+  const s = appState.settlements.find(item => item.id === id);
+  if (!s) return;
 
-  let conclusion = '';
+  appState.activeSettlement = s;
+  const cfg = appState.settings || {};
+
+  document.getElementById('invTruckInfo').textContent = `پلاک: ${cfg.plate_number || '---'} | مالک: ${cfg.owner_name || ''} | راننده: ${cfg.driver_name || ''}`;
+  document.getElementById('invDate').textContent = `تاریخ تسویه: ${s.settlement_date}`;
+  document.getElementById('invSharePercent').textContent = `${cfg.driver_share_percent || 20}٪`;
+
+  document.getElementById('invDriverShare').textContent = formatToman(s.driver_earned_share) + ' تومان';
+  document.getElementById('invDriverExpenses').textContent = formatToman(s.driver_paid_expenses) + ' تومان';
+  document.getElementById('invDriverTransfers').textContent = formatToman(s.driver_transfers_to_owner || 0) + ' تومان';
+  document.getElementById('invTotalCredit').textContent = formatToman(s.total_driver_credit) + ' تومان';
+
+  document.getElementById('invCashCollected').textContent = formatToman(s.driver_cash_collected) + ' تومان';
+  document.getElementById('invAdvancesPaid').textContent = formatToman(s.advances_paid_by_owner) + ' تومان';
+  document.getElementById('invTotalDebit').textContent = formatToman(s.total_driver_debit) + ' تومان';
+
+  const balance = s.final_balance || 0;
+  const balanceEl = document.getElementById('invFinalBalance');
+  const labelEl = document.getElementById('invBalanceLabel');
+  const concEl = document.getElementById('invConclusionText');
+
+  balanceEl.textContent = formatToman(Math.abs(balance)) + ' تومان';
+
   if (balance > 0) {
-    conclusion = `✅ مبلغ قابل پرداخت توسط مالک به راننده: ${formatToman(balance)} تومان`;
+    labelEl.textContent = 'مبلغ پرداخت شده به راننده:';
+    balanceEl.style.color = '#16a34a';
+    concEl.textContent = `این دوره قطعی تسویه شده و مبلغ (${formatToman(balance)} تومان) به راننده پرداخت گردیده است.`;
   } else if (balance < 0) {
-    conclusion = `⚠️ مبلغ اضافه دست راننده که باید برگشت داده شود: ${formatToman(balance)} تومان`;
+    labelEl.textContent = 'مبلغ بازگردانده شده توسط راننده:';
+    balanceEl.style.color = '#dc2626';
+    concEl.textContent = `راننده مبلغ (${formatToman(Math.abs(balance))} تومان) اضافه را به مالک بازگردانده است.`;
   } else {
-    conclusion = `✅ حساب کاملاً صاف و تراز است (صفر تومان)`;
+    labelEl.textContent = 'مانده نهایی تسویه:';
+    balanceEl.style.color = '#2563eb';
+    concEl.textContent = 'حساب کاملاً تراز و صفر بوده است.';
   }
 
-  const text = `
-📋 *صورت‌حساب رسمی کارکرد تریلی*
-🚛 پلاک: ${s.plate_number} (${s.truck_model})
-👤 مالک: ${s.owner_name}
-🧢 راننده: ${s.driver_name}
-📅 تاریخ: ${today}
-━━━━━━━━━━━━━━━━━━
-🔹 *بخش اول: بستانکاری راننده (طلب)*
-• سهم ${s.driver_share_percent}٪ از کرایه بارها: ${formatToman(sum.driver_share_unsettled)} تومان
-• خرج‌های مسیر پرداختی از جیب راننده: ${formatToman(sum.driver_paid_expenses)} تومان
-➕ *جمع طلب راننده: ${formatToman(sum.driver_total_credit)} تومان*
+  // Hide confirm settlement button because it's already settled!
+  const confirmBtn = document.getElementById('btnConfirmSettlement');
+  if (confirmBtn) confirmBtn.style.display = 'none';
 
-🔸 *بخش دوم: بدهکاری راننده (دریافتی‌ها)*
-• پیش‌کرایه‌های نقدی دست راننده: ${formatToman(sum.driver_cash_collected)} تومان
-• مساعده‌ها و واریزی‌های پدر: ${formatToman(sum.advances_paid)} تومان
-➖ *جمع دریافتی راننده: ${formatToman(sum.driver_total_debit)} تومان*
-━━━━━━━━━━━━━━━━━━
-📊 *مانده نهایی تسویه:*
-${conclusion}
-━━━━━━━━━━━━━━━━━━
-_تولید شده توسط سیستم حسابدار تریلی_
-  `.trim();
+  openModal('modalSettlement');
+}
 
+function generateInvoiceText() {
+  const isHistorical = !!appState.activeSettlement;
+  const s = appState.settings || {};
+  
+  let shareAmount = 0;
+  let driverExpenses = 0;
+  let driverTransfers = 0;
+  let totalCredit = 0;
+  let cashCollected = 0;
+  let advancesPaid = 0;
+  let totalDebit = 0;
+  let balance = 0;
+  let settlementDate = getTodayShamsi();
+
+  if (isHistorical) {
+    const act = appState.activeSettlement;
+    shareAmount = act.driver_earned_share || 0;
+    driverExpenses = act.driver_paid_expenses || 0;
+    driverTransfers = act.driver_transfers_to_owner || 0;
+    totalCredit = act.total_driver_credit || 0;
+    cashCollected = act.driver_cash_collected || 0;
+    advancesPaid = act.advances_paid_by_owner || 0;
+    totalDebit = act.total_driver_debit || 0;
+    balance = act.final_balance || 0;
+    settlementDate = act.settlement_date || getTodayShamsi();
+  } else {
+    const sum = appState.summary || {};
+    shareAmount = sum.driver_share_unsettled || 0;
+    driverExpenses = sum.driver_paid_expenses || 0;
+    driverTransfers = sum.driver_transfers_to_owner || 0;
+    totalCredit = sum.driver_total_credit || 0;
+    cashCollected = sum.driver_cash_collected || 0;
+    advancesPaid = sum.advances_paid || 0;
+    totalDebit = sum.driver_total_debit || 0;
+    balance = sum.final_balance || 0;
+  }
+
+  let balanceMessage = '';
+  if (balance > 0) {
+    balanceMessage = `✅ مانده نهایی جهت تسویه:\nمبلغ قابل پرداخت توسط مالک به راننده: ${formatToman(balance)} تومان\n(${numberToPersianWords(balance)})`;
+  } else if (balance < 0) {
+    balanceMessage = `⚠️ مانده نهایی جهت تسویه:\nمبلغ اضافه دست راننده که باید بازگردانده شود: ${formatToman(Math.abs(balance))} تومان\n(${numberToPersianWords(Math.abs(balance))})`;
+  } else {
+    balanceMessage = `✅ حساب طرفین کاملاً تراز و صفر است (بدون مانده).`;
+  }
+
+  const text = 
+`📋 صورت‌حساب رسمی کارکرد تریلی و راننده
+━━━━━━━━━━━━━━━━━━━━
+🚛 مشخصات تریلی: ${s.plate_number || '---'} (${s.truck_model || 'تریلی'})
+👤 صاحب ماشین (مالک): ${s.owner_name || 'مالک'}
+🧢 راننده محترم: ${s.driver_name || 'راننده'}
+📅 تاریخ تسویه: ${settlementDate}
+━━━━━━━━━━━━━━━━━━━━
+🟢 بخش اول: بستانکاری راننده (طلب راننده)
+۱. سهم ${s.driver_share_percent || 20}٪ راننده از کرایه صافی بارها: ${formatToman(shareAmount)} تومان
+۲. مخارج مسیر پرداختی از جیب راننده: ${formatToman(driverExpenses)} تومان
+۳. واریزی‌های راننده به کارت مالک: ${formatToman(driverTransfers)} تومان
+➕ جمع کل طلب راننده: ${formatToman(totalCredit)} تومان
+
+🔴 بخش دوم: بدهکاری راننده (دریافتی‌های راننده)
+۱. پیش‌کرایه‌های نقدی دست راننده: ${formatToman(cashCollected)} تومان
+۲. مساعده‌ها و واریزی‌های پدر به راننده: ${formatToman(advancesPaid)} تومان
+➖ جمع کل بدهی راننده: ${formatToman(totalDebit)} تومان
+━━━━━━━━━━━━━━━━━━━━
+⚖️ نتیجه نهایی:
+${balanceMessage}
+━━━━━━━━━━━━━━━━━━━━
+✨ ثبت شده در سامانه حسابداری هوشمند تریلی`;
+
+  return text;
+}
+
+function copyInvoiceText() {
+  const text = generateInvoiceText();
+  const btn = document.getElementById('btnCopyInvoice');
+  const btnIcon = document.getElementById('copyBtnIcon');
+  const btnText = document.getElementById('copyBtnText');
+
+  // Universal copy with fallback for non-secure HTTP contexts
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(() => {
+      onCopySuccess();
+    }).catch(() => {
+      fallbackCopy(text);
+    });
+  } else {
+    fallbackCopy(text);
+  }
+
+  function fallbackCopy(str) {
+    const el = document.createElement('textarea');
+    el.value = str;
+    el.setAttribute('readonly', '');
+    el.style.position = 'absolute';
+    el.style.left = '-9999px';
+    document.body.appendChild(el);
+    el.select();
+    try {
+      const successful = document.execCommand('copy');
+      if (successful) onCopySuccess();
+      else alert('لطفاً متن را به صورت دستی انتخاب و کپی فرمایید.');
+    } catch (err) {
+      alert('خطا در کپی: ' + err);
+    }
+    document.body.removeChild(el);
+  }
+
+  function onCopySuccess() {
+    if (btn) btn.classList.add('copied');
+    if (btnIcon) btnIcon.textContent = '✅';
+    if (btnText) btnText.textContent = 'متن صورت‌حساب کپی شد!';
+    showToast('📋 متن صورت‌حساب با موفقیت در حافظه کپی شد! اکنون می‌توانید در ایتا، واتساپ یا پیامک الصاق (Paste) نمایید.');
+
+    setTimeout(() => {
+      if (btn) btn.classList.remove('copied');
+      if (btnIcon) btnIcon.textContent = '📋';
+      if (btnText) btnText.textContent = 'کپی متن صورت‌حساب (جهت ارسال در ایتا، روبیکا، پیامک و...)';
+    }, 2800);
+  }
+}
+
+function shareInvoiceWhatsApp() {
+  const text = generateInvoiceText();
   const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
   window.open(url, '_blank');
 }
@@ -1105,7 +1406,7 @@ async function confirmAndExecuteSettlement() {
     if (res.ok) {
       closeModal('modalSettlement');
       await loadAllData();
-      alert('تسویه حساب با موفقیت ثبت شد و فاکتور در تاریخچه ذخیره گردید!');
+      showToast('تسویه حساب با موفقیت ثبت شد و فاکتور در تاریخچه ذخیره گردید!');
       switchNav('settlements');
     } else {
       const err = await res.json();

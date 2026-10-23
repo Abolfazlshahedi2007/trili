@@ -46,6 +46,61 @@
 
     <!-- MAIN VIEWS -->
     
+    <!-- 0. DEDICATED LOGIN VIEW -->
+    <main id="viewLogin" class="view-section login-screen" style="display:none;">
+      <div class="login-header">
+        <div class="login-logo">🚛</div>
+        <h1 class="login-title">سامانه مالی و حسابداری تریلی</h1>
+        <p class="login-subtitle">جهت ورود به برنامه، نقش خود را انتخاب نمایید:</p>
+      </div>
+
+      <div class="role-cards-container">
+        <!-- 1. Driver Card -->
+        <div class="role-select-card">
+          <div class="role-card-header">
+            <div class="role-icon-box icon-driver">🧢</div>
+            <div>
+              <div class="role-card-title">ورود به عنوان راننده</div>
+              <span class="badge-tag badge-driver">دسترسی راننده</span>
+            </div>
+          </div>
+          <p class="role-card-desc">
+            ثبت بارهای جاده، ثبت فاکتورهای سوخت، عوارضی و مخارج، ثبت واریزی‌ها به کارت صاحب‌ماشین و مشاهده مانده طلب شما.
+          </p>
+          <button type="button" class="btn-primary" onclick="loginAsDriver()">
+            <span>🚚</span>
+            <span>ورود به پنل راننده</span>
+          </button>
+        </div>
+
+        <!-- 2. Owner Card -->
+        <div class="role-select-card">
+          <div class="role-card-header">
+            <div class="role-icon-box icon-owner">👑</div>
+            <div>
+              <div class="role-card-title">ورود به عنوان صاحب ماشین (پدر)</div>
+              <span class="badge-tag badge-owner">مدیریت کامل و محرمانه</span>
+            </div>
+          </div>
+          <p class="role-card-desc">
+            مشاهده سود کل تریلی، صدور صورت‌حساب قطعی تسویه حساب، ثبت مساعده به راننده و دسترسی به تنظیمات خودرو و قرارداد.
+          </p>
+          
+          <form onsubmit="handleOwnerLoginDirect(event)">
+            <div class="form-group" style="margin-bottom: 12px;">
+              <label class="form-label">رمز عبور مدیریت پدر (پین‌کد):</label>
+              <input type="password" id="loginOwnerPin" class="form-input" placeholder="رمز ۴ رقمی (پیش‌فرض: 1234)" style="text-align: center; font-size: 18px; letter-spacing: 4px; font-weight: 800;" maxlength="10" required>
+              <div id="loginPinError" style="color: #ef4444; font-size: 12px; margin-top: 4px; display: none;">❌ رمز عبور نادرست است!</div>
+            </div>
+            <button type="submit" class="btn-primary" style="background: #0f172a;">
+              <span>🔒</span>
+              <span>تایید رمز و ورود به پنل مالک</span>
+            </button>
+          </form>
+        </div>
+      </div>
+    </main>
+
     <!-- 1. DASHBOARD VIEW -->
     <main id="viewDashboard" class="view-section">
       
@@ -389,11 +444,31 @@
     <div class="modal-overlay" id="modalPayment">
       <div class="modal-sheet">
         <div class="modal-header">
-          <div class="modal-title">💳 ثبت واریزی و مساعده به راننده</div>
+          <div class="modal-title" id="modalPaymentTitle">💳 ثبت واریزی و مساعده</div>
           <button class="modal-close-btn" onclick="closeModal('modalPayment')">✕</button>
         </div>
         
         <form id="formPayment" onsubmit="handlePaymentSubmit(event)">
+          <!-- Notice for Driver -->
+          <div id="driverPayNotice" style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 10px; font-size: 12px; color: #1e40af; margin-bottom: 12px; display: none;">
+            💡 هرگونه کرایه یا پیش‌کرایه‌ای که از جاده به حساب کارت پدر واریز کرده‌اید را اینجا ثبت کنید تا بلافاصله به طلب شما اضافه گردد.
+          </div>
+
+          <!-- Transaction Type for Owner -->
+          <div class="form-group" id="ownerPaySelector" style="display: none;">
+            <label class="form-label">نوع تراکنش واریزی *</label>
+            <div style="display: flex; gap: 10px;">
+              <label style="flex:1; border: 1px solid #cbd5e1; border-radius: 12px; padding: 10px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="radio" name="payPayerRadio" id="radioPayerOwner" value="owner" checked>
+                <span style="font-size: 12px; font-weight: 700; color: #dc2626;">مساعده به راننده</span>
+              </label>
+              <label style="flex:1; border: 1px solid #cbd5e1; border-radius: 12px; padding: 10px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="radio" name="payPayerRadio" id="radioPayerDriver" value="driver">
+                <span style="font-size: 12px; font-weight: 700; color: #16a34a;">واریز راننده به کارت من</span>
+              </label>
+            </div>
+          </div>
+
           <div class="form-group">
             <label class="form-label">مبلغ واریز شده (تومان) *</label>
             <input type="text" inputmode="numeric" id="payAmount" class="form-input currency-input" placeholder="مثلاً ۵,۰۰۰,۰۰۰" oninput="handleCurrencyInput(this)" required>
@@ -418,12 +493,17 @@
 
           <div class="form-group">
             <label class="form-label">شماره پیگیری / ارجاع واریز</label>
-            <input type="text" id="payTracking" class="form-input" placeholder="کد پیگیری تراکنش">
+            <input type="text" id="payTracking" class="form-input" placeholder="کد پیگیری یا شماره ارجاع فیش">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">عکس فیش واریز / رسید بانکی</label>
+            <input type="file" id="payReceiptFile" class="form-input" accept="image/*" capture="environment">
           </div>
 
           <div class="form-group">
             <label class="form-label">بابت / توضیحات</label>
-            <input type="text" id="payDesc" class="form-input" placeholder="مثلاً مساعده بین راهی یا علی‌الحساب">
+            <input type="text" id="payDesc" class="form-input" placeholder="مثلاً واریز پیش‌کرایه بار یا مساعده جاده">
           </div>
 
           <button type="submit" class="btn-primary">ثبت واریزی</button>
@@ -458,6 +538,10 @@
             <span>مجموع مخارج پرداخت شده از جیب راننده:</span>
             <strong id="invDriverExpenses">۰ تومان</strong>
           </div>
+          <div class="invoice-item-row">
+            <span>واریزی‌های راننده به کارت مالک:</span>
+            <strong id="invDriverTransfers">۰ تومان</strong>
+          </div>
           <div class="invoice-item-row" style="background:#f0fdf4; font-weight:700;">
             <span>جمع کل طلب راننده:</span>
             <strong id="invTotalCredit">۰ تومان</strong>
@@ -472,7 +556,7 @@
             <strong id="invCashCollected">۰ تومان</strong>
           </div>
           <div class="invoice-item-row">
-            <span>مجموع واریزی‌ها و مساعده‌های کارت‌به‌کارت پدر:</span>
+            <span>مجموع مساعده‌ها و واریزی‌های پدر:</span>
             <strong id="invAdvancesPaid">۰ تومان</strong>
           </div>
           <div class="invoice-item-row" style="background:#fef2f2; font-weight:700;">
@@ -490,12 +574,17 @@
           </div>
         </div>
 
-        <button class="whatsapp-share-btn" onclick="shareInvoiceWhatsApp()">
-          <span>📲</span>
-          <span>ارسال متن صورت‌حساب در واتساپ / ایتا</span>
+        <button id="btnCopyInvoice" class="copy-invoice-btn" onclick="copyInvoiceText()">
+          <span id="copyBtnIcon">📋</span>
+          <span id="copyBtnText">کپی متن صورت‌حساب (جهت ارسال در ایتا، روبیکا، پیامک و...)</span>
         </button>
 
-        <button class="btn-primary" style="margin-top: 10px; background: #0f172a;" onclick="confirmAndExecuteSettlement()">
+        <button class="whatsapp-share-btn" onclick="shareInvoiceWhatsApp()">
+          <span>📲</span>
+          <span>ارسال مستقیم در واتساپ</span>
+        </button>
+
+        <button id="btnConfirmSettlement" class="btn-primary" style="margin-top: 10px; background: #0f172a;" onclick="confirmAndExecuteSettlement()">
           <span>✓</span>
           <span>ثبت قطعی تسویه و صفر کردن دوره</span>
         </button>
@@ -603,6 +692,9 @@
         <img id="viewerImg" src="" style="max-width: 100%; border-radius: 12px; max-height: 65vh; object-fit: contain;">
       </div>
     </div>
+
+    <!-- App Toast Notification -->
+    <div id="appToast" class="toast-notification"></div>
 
   </div>
 
