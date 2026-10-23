@@ -1,0 +1,5 @@
+{
+  "app": "trili",
+  "platform": "flask",
+  "port": 5000
+}

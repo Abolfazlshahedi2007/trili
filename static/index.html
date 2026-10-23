@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>حسابدار تریلی و راننده</title>
+  
+  <!-- PWA Meta Tags -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="icon" type="image/png" href="/icons/icon-192.png">
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <!-- Top Header -->
+    <header class="top-header">
+      <div class="header-row">
+        <div class="app-title-box">
+          <div class="app-logo-badge">🚛</div>
+          <div>
+            <div class="app-title">حسابدار تریلی</div>
+            <div class="app-subtitle" id="headerSubtitle">مدیریت حساب راننده و مالک</div>
+          </div>
+        </div>
+        
+        <!-- Iranian License Plate View -->
+        <div class="iran-plate" id="headerPlate" onclick="openSettingsModal()" title="تنظیمات پلاک و خودرو">
+          <div class="plate-blue-flag">I.R.</div>
+          <div class="plate-middle" id="plateDisplay">۱۲ ع ۳۴۵</div>
+          <div class="plate-iran" id="plateCityDisplay">ایران ۲۱</div>
+        </div>
+      </div>
+
+      <!-- Role Selector Toggle -->
+      <div class="role-toggle-bar">
+        <div class="role-tab active" id="tabRoleOwner" onclick="switchRole('owner')">
+          👑 نمای پدر (مالک)
+        </div>
+        <div class="role-tab" id="tabRoleDriver" onclick="switchRole('driver')">
+          🧢 نمای راننده
+        </div>
+      </div>
+    </header>
+
+    <!-- MAIN VIEWS -->
+    
+    <!-- 1. DASHBOARD VIEW -->
+    <main id="viewDashboard" class="view-section">
+      
+      <!-- Balance Hero Card -->
+      <div class="balance-hero-card">
+        <div id="heroTag" class="hero-status-tag status-zero">
+          در حال بارگذاری وضعیت...
+        </div>
+        
+        <div class="hero-amount">
+          <span id="heroAmountText">۰</span>
+          <span class="hero-currency">تومان</span>
+        </div>
+        
+        <div class="hero-desc" id="heroDescText">
+          وضعیت مانده حساب تسویه نشده راننده و مالک
+        </div>
+
+        <!-- 4 Key Metrics Breakdown -->
+        <div class="metrics-grid">
+          <div class="metric-item">
+            <div class="metric-label">
+              <span>🎯 سهم ۲۰٪ راننده</span>
+            </div>
+            <div class="metric-val color-green" id="dashDriverShare">۰ ت</div>
+          </div>
+          
+          <div class="metric-item">
+            <div class="metric-label">
+              <span>⛽ خرج راه راننده</span>
+            </div>
+            <div class="metric-val color-blue" id="dashDriverExpenses">+ ۰ ت</div>
+          </div>
+
+          <div class="metric-item">
+            <div class="metric-label">
+              <span>💵 نقد دست راننده</span>
+            </div>
+            <div class="metric-val color-amber" id="dashCashCollected">- ۰ ت</div>
+          </div>
+
+          <div class="metric-item">
+            <div class="metric-label">
+              <span>💳 مساعده واریزی پدر</span>
+            </div>
+            <div class="metric-val color-red" id="dashAdvancesPaid">- ۰ ت</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Actions Grid -->
+      <div class="quick-actions-bar">
+        <div class="quick-btn" onclick="openTripModal()">
+          <div class="quick-btn-icon btn-icon-blue">📦</div>
+          <span>ثبت بار جدید</span>
+        </div>
+        <div class="quick-btn" onclick="openExpenseModal()">
+          <div class="quick-btn-icon btn-icon-amber">⛽</div>
+          <span>ثبت خرجی راه</span>
+        </div>
+        <div class="quick-btn" onclick="openPaymentModal()">
+          <div class="quick-btn-icon btn-icon-green">💳</div>
+          <span>ثبت مساعده</span>
+        </div>
+      </div>
+
+      <!-- Unsettled Trips Section -->
+      <div class="section-header">
+        <div class="section-title">سفرهای تسویه نشده</div>
+        <div class="section-badge" id="dashTripCountBadge">۰ سفر</div>
+      </div>
+      <div class="card-list" id="dashTripsList"></div>
+
+      <!-- Unsettled Expenses Section -->
+      <div class="section-header" style="margin-top: 24px;">
+        <div class="section-title">آخرین خرجی‌های مسیر</div>
+        <span class="btn-sm-action" onclick="switchNav('expenses')">مشاهده همه ←</span>
+      </div>
+      <div class="card-list" id="dashExpensesList"></div>
+
+      <!-- Settlement CTA Banner -->
+      <div style="padding: 20px 16px;">
+        <button class="btn-primary btn-success" onclick="openSettlementPreviewModal()">
+          <span>📑</span>
+          <span>محاسبه و صدور صورت‌حساب تسویه</span>
+        </button>
+      </div>
+
+    </main>
+
+    <!-- 2. TRIPS VIEW -->
+    <main id="viewTrips" class="view-section" style="display:none; padding-top: 16px;">
+      <div class="section-header">
+        <div class="section-title">لیست بارها و بارنامه‌ها</div>
+        <button class="btn-primary" style="width: auto; padding: 6px 14px; font-size: 13px;" onclick="openTripModal()">
+          + بار جدید
+        </button>
+      </div>
+
+      <!-- Filter tabs -->
+      <div style="display: flex; gap: 8px; padding: 0 16px 14px 16px; overflow-x: auto;">
+        <button class="badge-tag badge-unsettled" style="border:none; cursor:pointer;" onclick="filterTrips('unsettled')">تسویه نشده‌ها</button>
+        <button class="badge-tag badge-owner" style="border:none; cursor:pointer;" onclick="filterTrips('settled')">تسویه شده‌ها</button>
+        <button class="badge-tag badge-owner" style="border:none; cursor:pointer;" onclick="filterTrips('all')">همه بارها</button>
+      </div>
+
+      <div class="card-list" id="allTripsList"></div>
+    </main>
+
+    <!-- 3. EXPENSES VIEW -->
+    <main id="viewExpenses" class="view-section" style="display:none; padding-top: 16px;">
+      <div class="section-header">
+        <div class="section-title">مخارج، سوخت و تعمیرات</div>
+        <button class="btn-primary" style="width: auto; padding: 6px 14px; font-size: 13px;" onclick="openExpenseModal()">
+          + ثبت هزینه
+        </button>
+      </div>
+
+      <!-- Filter tabs -->
+      <div style="display: flex; gap: 8px; padding: 0 16px 14px 16px; overflow-x: auto;">
+        <button class="badge-tag badge-driver" style="border:none; cursor:pointer;" onclick="filterExpenses('driver')">پرداخت راننده (طلب)</button>
+        <button class="badge-tag badge-owner" style="border:none; cursor:pointer;" onclick="filterExpenses('owner')">پرداخت پدر (ماشین)</button>
+        <button class="badge-tag badge-unsettled" style="border:none; cursor:pointer;" onclick="filterExpenses('all')">همه خرج‌ها</button>
+      </div>
+
+      <div class="card-list" id="allExpensesList"></div>
+    </main>
+
+    <!-- 4. ADVANCES (PAYMENTS) VIEW -->
+    <main id="viewPayments" class="view-section" style="display:none; padding-top: 16px;">
+      <div class="section-header">
+        <div class="section-title">واریزی‌ها و مساعده‌های راننده</div>
+        <button class="btn-primary" style="width: auto; padding: 6px 14px; font-size: 13px;" onclick="openPaymentModal()">
+          + ثبت واریزی
+        </button>
+      </div>
+      <div class="card-list" id="allPaymentsList"></div>
+    </main>
+
+    <!-- 5. SETTLEMENTS HISTORY VIEW -->
+    <main id="viewSettlements" class="view-section" style="display:none; padding-top: 16px;">
+      <div class="section-header">
+        <div class="section-title">تاریخچه تسویه‌حساب‌ها</div>
+        <button class="btn-primary btn-success" style="width: auto; padding: 6px 14px; font-size: 13px;" onclick="openSettlementPreviewModal()">
+          تسویه جدید
+        </button>
+      </div>
+      <div class="card-list" id="allSettlementsList"></div>
+    </main>
+
+    <!-- BOTTOM NAVIGATION -->
+    <nav class="bottom-nav">
+      <div class="nav-item active" id="navDash" onclick="switchNav('dashboard')">
+        <div class="nav-icon">📊</div>
+        <span>داشبورد</span>
+      </div>
+      <div class="nav-item" id="navTrips" onclick="switchNav('trips')">
+        <div class="nav-icon">🚛</div>
+        <span>سفرها</span>
+      </div>
+      <div class="nav-item" id="navExpenses" onclick="switchNav('expenses')">
+        <div class="nav-icon">⛽</div>
+        <span>خرج‌ها</span>
+      </div>
+      <div class="nav-item" id="navPayments" onclick="switchNav('payments')">
+        <div class="nav-icon">💳</div>
+        <span>مساعده‌ها</span>
+      </div>
+      <div class="nav-item" id="navSettlements" onclick="switchNav('settlements')">
+        <div class="nav-icon">📑</div>
+        <span>تسویه‌ها</span>
+      </div>
+    </nav>
+
+    <!-- ==================== MODALS ==================== -->
+
+    <!-- MODAL: ADD / EDIT TRIP -->
+    <div class="modal-overlay" id="modalTrip">
+      <div class="modal-sheet">
+        <div class="modal-header">
+          <div class="modal-title" id="modalTripTitle">📦 ثبت بار و بارنامه جدید</div>
+          <button class="modal-close-btn" onclick="closeModal('modalTrip')">✕</button>
+        </div>
+        
+        <form id="formTrip" onsubmit="handleTripSubmit(event)">
+          <input type="hidden" id="tripId">
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">مبدا بارگیری *</label>
+              <input type="text" id="tripOrigin" class="form-input" placeholder="مثلاً بندرعباس" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">مقصد تخلیه *</label>
+              <input type="text" id="tripDestination" class="form-input" placeholder="مثلاً تهران" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">شماره بارنامه</label>
+              <input type="text" id="tripBillNumber" class="form-input" placeholder="مثلاً ۹۸۷۴۲">
+            </div>
+            <div class="form-group">
+              <label class="form-label">تاریخ بارگیری</label>
+              <input type="text" id="tripLoadingDate" class="form-input" placeholder="۱۴۰۵/۰۲/۱۵">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">نوع بار</label>
+              <input type="text" id="tripCargo" class="form-input" placeholder="مثلاً کانتینر، آهن، گندم">
+            </div>
+            <div class="form-group">
+              <label class="form-label">وزن / تناژ</label>
+              <input type="number" step="0.1" id="tripWeight" class="form-input" placeholder="۲۴">
+            </div>
+          </div>
+
+          <!-- Financials -->
+          <div class="form-group">
+            <label class="form-label">کرایه کل بارنامه (تومان) *</label>
+            <input type="number" id="tripTotalFreight" class="form-input" placeholder="مثلاً ۴۰,۰۰۰,۰۰۰" oninput="calcTripSharesLive()" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">کمیسیون پایانه / باربری (تومان)</label>
+            <input type="number" id="tripCommission" class="form-input" placeholder="مثلاً ۲,۵۰۰,۰۰۰" oninput="calcTripSharesLive()">
+            <div class="form-hint">کمیسیون از کرایه کل کم می‌شود تا کرایه صافی به دست بیاید.</div>
+          </div>
+
+          <!-- Live Share Preview Box -->
+          <div class="live-calc-box">
+            <div class="live-calc-row">
+              <span>کرایه صافی بار:</span>
+              <strong id="liveNetFreight">۰ تومان</strong>
+            </div>
+            <div class="live-calc-row" style="font-weight: 800; color: #16a34a;">
+              <span>سهم راننده (۲۰٪):</span>
+              <strong id="liveDriverShare">۰ تومان</strong>
+            </div>
+            <div class="live-calc-row">
+              <span>سهم پدر (۸۰٪):</span>
+              <strong id="liveOwnerShare">۰ تومان</strong>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">پیش‌کرایه یا پس‌کرایه نقدی دست راننده (تومان)</label>
+            <input type="number" id="tripCashDriver" class="form-input" placeholder="مبلغی که راننده نقداً از بار دریافت کرده">
+            <div class="form-hint">این مبلغ از طلب راننده در زمان تسویه کسر می‌شود.</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">توضیحات و یادداشت</label>
+            <textarea id="tripNotes" class="form-textarea" rows="2" placeholder="توضیحات مربوط به باسکول، انعام یا شرکت حمل و نقل"></textarea>
+          </div>
+
+          <button type="submit" class="btn-primary">ذخیره بارنامه</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: ADD EXPENSE -->
+    <div class="modal-overlay" id="modalExpense">
+      <div class="modal-sheet">
+        <div class="modal-header">
+          <div class="modal-title">⛽ ثبت خرجی و هزینه راه</div>
+          <button class="modal-close-btn" onclick="closeModal('modalExpense')">✕</button>
+        </div>
+        
+        <form id="formExpense" onsubmit="handleExpenseSubmit(event)">
+          <div class="form-group">
+            <label class="form-label">این هزینه بابت کدام بار است؟</label>
+            <select id="expTripId" class="form-select">
+              <option value="">خرج عمومی ماشین (تعویض روغن، بیمه، استهلاک)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">نوع هزینه *</label>
+            <select id="expCategory" class="form-select" required>
+              <option value="گازوئیل">⛽ گازوئیل و سوخت</option>
+              <option value="عوارض">🛣️ عوارضی آزادراه</option>
+              <option value="باسکول">⚖️ باسکول</option>
+              <option value="انعام">🤝 انعام بارگیری / تخلیه</option>
+              <option value="پنچری">🛞 پنچری و باد و لاستیک</option>
+              <option value="روغن">🛢️ تعویض روغن و فیلترها</option>
+              <option value="تعمیرات">🔧 مکانیکی و قطعات یدکی</option>
+              <option value="جریمه">⚠️ جریمه راهنمایی و رانندگی</option>
+              <option value="متفرقه">📝 سایر خرج‌ها</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">مبلغ هزینه (تومان) *</label>
+            <input type="number" id="expAmount" class="form-input" placeholder="مثلاً ۷۵۰,۰۰۰" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">این هزینه را چه کسی پرداخت کرده؟ *</label>
+            <div style="display: flex; gap: 10px;">
+              <label style="flex:1; border: 1px solid #cbd5e1; border-radius: 12px; padding: 10px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="radio" name="expPaidBy" value="driver" checked>
+                <span style="font-size: 13px; font-weight: 700; color: #2563eb;">🧢 راننده از جیبش داده (طلبکار شود)</span>
+              </label>
+              <label style="flex:1; border: 1px solid #cbd5e1; border-radius: 12px; padding: 10px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="radio" name="expPaidBy" value="owner">
+                <span style="font-size: 13px; font-weight: 700; color: #475569;">👑 پدر پرداخت کرده</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">تاریخ هزینه</label>
+              <input type="text" id="expDate" class="form-input" placeholder="۱۴۰۵/۰۲/۱۵">
+            </div>
+            <div class="form-group">
+              <label class="form-label">عکس فاکتور / رسید</label>
+              <input type="file" id="expReceiptFile" class="form-input" accept="image/*" capture="environment">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">توضیحات</label>
+            <input type="text" id="expDesc" class="form-input" placeholder="مثلاً پمپ بنزین نایین">
+          </div>
+
+          <button type="submit" class="btn-primary">ثبت هزینه</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: ADD ADVANCE PAYMENT -->
+    <div class="modal-overlay" id="modalPayment">
+      <div class="modal-sheet">
+        <div class="modal-header">
+          <div class="modal-title">💳 ثبت واریزی و مساعده به راننده</div>
+          <button class="modal-close-btn" onclick="closeModal('modalPayment')">✕</button>
+        </div>
+        
+        <form id="formPayment" onsubmit="handlePaymentSubmit(event)">
+          <div class="form-group">
+            <label class="form-label">مبلغ واریز شده (تومان) *</label>
+            <input type="number" id="payAmount" class="form-input" placeholder="مثلاً ۵,۰۰۰,۰۰۰" required>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">تاریخ واریز</label>
+              <input type="text" id="payDate" class="form-input" placeholder="۱۴۰۵/۰۲/۱۵">
+            </div>
+            <div class="form-group">
+              <label class="form-label">روش پرداخت</label>
+              <select id="payMethod" class="form-select">
+                <option value="کارت به کارت">کارت به کارت</option>
+                <option value="نقدی">نقدی دستی</option>
+                <option value="پایا / ساتنا">پایا / ساتنا</option>
+                <option value="چک">چک</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">شماره پیگیری / ارجاع واریز</label>
+            <input type="text" id="payTracking" class="form-input" placeholder="کد پیگیری تراکنش">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">بابت / توضیحات</label>
+            <input type="text" id="payDesc" class="form-input" placeholder="مثلاً مساعده بین راهی یا علی‌الحساب">
+          </div>
+
+          <button type="submit" class="btn-primary">ثبت واریزی</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: SETTLEMENT PREVIEW & FACTOR -->
+    <div class="modal-overlay" id="modalSettlement">
+      <div class="modal-sheet">
+        <div class="modal-header">
+          <div class="modal-title">📑 صورت‌حساب رسمی تسویه با راننده</div>
+          <button class="modal-close-btn" onclick="closeModal('modalSettlement')">✕</button>
+        </div>
+
+        <div id="invoicePrintArea" class="invoice-card">
+          <div class="invoice-header">
+            <h3 style="font-size: 17px; font-weight: 800;">صورت‌حساب کارکرد تریلی و راننده</h3>
+            <div style="font-size: 12px; color: #64748b; margin-top: 4px;" id="invTruckInfo">پلاک: -- | مالک: --</div>
+            <div style="font-size: 12px; color: #64748b;" id="invDate">تاریخ تسویه: --</div>
+          </div>
+
+          <!-- Credit Items (طلب راننده) -->
+          <div style="font-weight: 800; font-size: 13px; color: #16a34a; margin: 8px 0 4px 0;">
+            بخش اول: بستانکاری راننده (طلب راننده)
+          </div>
+          <div class="invoice-item-row">
+            <span>سهم راننده از صافی بارها (<span id="invSharePercent">۲۰٪</span>):</span>
+            <strong id="invDriverShare">۰ تومان</strong>
+          </div>
+          <div class="invoice-item-row">
+            <span>مجموع مخارج پرداخت شده از جیب راننده:</span>
+            <strong id="invDriverExpenses">۰ تومان</strong>
+          </div>
+          <div class="invoice-item-row" style="background:#f0fdf4; font-weight:700;">
+            <span>جمع کل طلب راننده:</span>
+            <strong id="invTotalCredit">۰ تومان</strong>
+          </div>
+
+          <!-- Debit Items (بدهی راننده) -->
+          <div style="font-weight: 800; font-size: 13px; color: #dc2626; margin: 16px 0 4px 0;">
+            بخش دوم: بدهکاری راننده (دریافتی‌ها و مساعده)
+          </div>
+          <div class="invoice-item-row">
+            <span>پیش‌کرایه یا پس‌کرایه نقدی دست راننده:</span>
+            <strong id="invCashCollected">۰ تومان</strong>
+          </div>
+          <div class="invoice-item-row">
+            <span>مجموع واریزی‌ها و مساعده‌های کارت‌به‌کارت پدر:</span>
+            <strong id="invAdvancesPaid">۰ تومان</strong>
+          </div>
+          <div class="invoice-item-row" style="background:#fef2f2; font-weight:700;">
+            <span>جمع کل دریافتی‌های راننده:</span>
+            <strong id="invTotalDebit">۰ تومان</strong>
+          </div>
+
+          <!-- Final Calculation -->
+          <div class="invoice-total-row">
+            <span id="invBalanceLabel">مانده خالص جهت تسویه:</span>
+            <span id="invFinalBalance" style="color: #2563eb;">۰ تومان</span>
+          </div>
+          <div style="font-size: 11px; text-align: center; margin-top: 10px; color: #64748b;" id="invConclusionText">
+            حساب کاملاً تراز و شفاف است.
+          </div>
+        </div>
+
+        <button class="whatsapp-share-btn" onclick="shareInvoiceWhatsApp()">
+          <span>📲</span>
+          <span>ارسال متن صورت‌حساب در واتساپ / ایتا</span>
+        </button>
+
+        <button class="btn-primary" style="margin-top: 10px; background: #0f172a;" onclick="confirmAndExecuteSettlement()">
+          <span>✓</span>
+          <span>ثبت قطعی تسویه و صفر کردن دوره</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- MODAL: SETTINGS -->
+    <div class="modal-overlay" id="modalSettings">
+      <div class="modal-sheet">
+        <div class="modal-header">
+          <div class="modal-title">⚙️ تنظیمات تریلی و قرارداد</div>
+          <button class="modal-close-btn" onclick="closeModal('modalSettings')">✕</button>
+        </div>
+        
+        <form id="formSettings" onsubmit="handleSettingsSubmit(event)">
+          <div class="form-group">
+            <label class="form-label">نام مالک (پدر)</label>
+            <input type="text" id="settingOwner" class="form-input" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">نام راننده</label>
+            <input type="text" id="settingDriver" class="form-input" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">پلاک تریلی</label>
+            <input type="text" id="settingPlate" class="form-input" placeholder="۱۲ ع ۳۴۵ ایران ۲۱" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">مدل و نوع تریلی</label>
+            <input type="text" id="settingModel" class="form-input" placeholder="ولوو اف‌اچ ۵۰۰">
+          </div>
+          <div class="form-group">
+            <label class="form-label">درصد سهم راننده از کرایه صافی (درصد)</label>
+            <input type="number" step="0.5" id="settingDriverPct" class="form-input" value="20" required>
+            <div class="form-hint">طبق توافق شما، پیش‌فرض ۲۰٪ از کرایه صافی است.</div>
+          </div>
+          <button type="submit" class="btn-primary">ذخیره تنظیمات</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: IMAGE VIEWER -->
+    <div class="modal-overlay" id="modalImage">
+      <div class="modal-sheet" style="text-align: center;">
+        <div class="modal-header">
+          <div class="modal-title">📷 تصویر رسید / فاکتور</div>
+          <button class="modal-close-btn" onclick="closeModal('modalImage')">✕</button>
+        </div>
+        <img id="viewerImg" src="" style="max-width: 100%; border-radius: 12px; max-height: 65vh; object-fit: contain;">
+      </div>
+    </div>
+
+  </div>
+
+  <!-- JavaScript -->
+  <script src="/js/app.js"></script>
+</body>
+</html>

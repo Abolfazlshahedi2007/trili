@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+venv/
+env/
+ENV/
+*.db
+uploads/*
+!uploads/.gitkeep
+cloudflared.exe
+*.log
+.vscode/
+.idea/
