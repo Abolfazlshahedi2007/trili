@@ -1,7 +1,7 @@
 import os
 import uuid
 from datetime import datetime
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, send_file
 from werkzeug.utils import secure_filename
 from sqlalchemy.orm import joinedload
 from models import db, Setting, Trip, Expense, AdvancePayment, Settlement, AuditLog
@@ -674,6 +674,21 @@ def upload_file():
         file.save(filepath)
         return jsonify({'status': 'success', 'filename': unique_name, 'url': f"/uploads/{unique_name}"})
     return jsonify({'status': 'error', 'message': 'فرمت فایل مجاز نیست (فقط تصاویر)'}), 400
+
+# ----------------- Database Backup & Export -----------------
+@app.route('/api/backup/download', methods=['GET'])
+def download_backup():
+    actor_role = request.args.get('role', 'driver')
+    if actor_role != 'owner':
+        return jsonify({'status': 'error', 'message': 'فقط مالک مجاز به دانلود فایل پشتیبان دیتابیس است.'}), 403
+
+    db_path = os.path.join(BASE_DIR, 'trili.db')
+    if not os.path.exists(db_path):
+        return jsonify({'status': 'error', 'message': 'فایل دیتابیس یافت نشد.'}), 404
+
+    date_str = datetime.now().strftime('%Y%m%d_%H%M')
+    filename = f"trili_database_backup_{date_str}.db"
+    return send_file(db_path, as_attachment=True, download_name=filename)
 
 if __name__ == '__main__':
     init_db()

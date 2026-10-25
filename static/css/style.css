@@ -39,7 +39,8 @@ body {
   direction: rtl;
   text-align: right;
   min-height: 100vh;
-  padding-bottom: 90px;
+  padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px));
+  -webkit-font-smoothing: antialiased;
 }
 
 /* Mobile Wrapper Container */
@@ -52,11 +53,11 @@ body {
   box-shadow: 0 0 40px rgba(0,0,0,0.05);
 }
 
-/* Top App Bar */
+/* Top App Bar with iOS Dynamic Island & Notch support */
 .top-header {
   background: linear-gradient(135deg, #1e293b, #0f172a);
   color: white;
-  padding: 16px 20px;
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 20px 14px 20px;
   position: sticky;
   top: 0;
   z-index: 40;
@@ -484,7 +485,7 @@ body {
   font-weight: 500;
 }
 
-/* Bottom App Navigation Bar */
+/* Bottom App Navigation Bar with iOS Home Indicator Bar support */
 .bottom-nav {
   position: fixed;
   bottom: 0;
@@ -496,7 +497,7 @@ body {
   border-top: 1px solid #e2e8f0;
   display: flex;
   justify-content: space-around;
-  padding: 8px 6px 14px 6px;
+  padding: 8px 6px calc(10px + env(safe-area-inset-bottom, 0px)) 6px;
   z-index: 50;
   box-shadow: 0 -4px 16px rgba(0,0,0,0.06);
 }
@@ -552,8 +553,9 @@ body {
   max-height: 90vh;
   border-top-left-radius: 24px;
   border-top-right-radius: 24px;
-  padding: 24px 20px 32px 20px;
+  padding: 24px 20px calc(28px + env(safe-area-inset-bottom, 0px)) 20px;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   box-shadow: 0 -10px 40px rgba(0,0,0,0.2);
   animation: slideUp 0.25s ease-out;
 }
@@ -610,7 +612,7 @@ body {
   padding: 12px 14px;
   border: 1px solid #cbd5e1;
   border-radius: 12px;
-  font-size: 14px;
+  font-size: 16px; /* 16px prevents iOS Safari from automatically zooming into inputs */
   color: #0f172a;
   outline: none;
   transition: border-color 0.2s;
@@ -932,4 +934,37 @@ body {
 .copy-invoice-btn.copied {
   background: #10b981 !important;
   color: white !important;
+}
+
+/* iOS PWA Step Guide */
+.ios-step-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  text-align: right;
+}
+
+.ios-step-number {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #2563eb;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.ios-step-text {
+  font-size: 13px;
+  color: #334155;
+  line-height: 1.5;
 }

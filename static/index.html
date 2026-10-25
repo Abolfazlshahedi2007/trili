@@ -2,15 +2,23 @@
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>حسابدار تریلی و راننده</title>
   
-  <!-- PWA Meta Tags -->
+  <!-- PWA & Apple iOS Native Meta Tags -->
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#0f172a">
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="حسابدار تریلی">
+  
+  <!-- Apple Touch Icons for iPhone Home Screen -->
   <link rel="icon" type="image/png" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="167x167" href="/icons/icon-192.png">
 
   <!-- CSS -->
   <link rel="stylesheet" href="/css/style.css">
@@ -669,13 +677,61 @@
           </div>
           <button type="submit" class="btn-primary">ذخیره تنظیمات</button>
           
-          <div style="margin-top: 16px; border-top: 1px solid #f1f5f9; padding-top: 14px; text-align: center;">
-            <button type="button" class="btn-sm-action" style="margin: 0 auto; color: #2563eb;" onclick="openAuditModal()">
+          <div style="margin-top: 16px; border-top: 1px solid #f1f5f9; padding-top: 14px; display: flex; flex-direction: column; gap: 8px;">
+            <button type="button" class="btn-sm-action" style="color: #0f172a; border-color: #cbd5e1; width: 100%; justify-content: center;" onclick="openModal('modalIosGuide')">
+              <span>🍏</span>
+              <span>راهنمای نصب روی صفحه اصلی آیفون (iOS)</span>
+            </button>
+            <button type="button" class="btn-sm-action" style="color: #059669; border-color: #a7f3d0; width: 100%; justify-content: center;" onclick="downloadDatabaseBackup()">
+              <span>💾</span>
+              <span>دانلود و پشتیبان‌گیری از دیتابیس حساب‌ها</span>
+            </button>
+            <button type="button" class="btn-sm-action" style="color: #2563eb; border-color: #bfdbfe; width: 100%; justify-content: center;" onclick="openAuditModal()">
               <span>📜</span>
               <span>مشاهده تاریخچه و لاگ تغییرات سیستم (Audit Trail)</span>
             </button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <!-- MODAL: IOS INSTALLATION GUIDE -->
+    <div class="modal-overlay" id="modalIosGuide">
+      <div class="modal-sheet">
+        <div class="modal-header">
+          <div class="modal-title">🍏 راهنمای نصب روی صفحه اصلی آیفون</div>
+          <button class="modal-close-btn" onclick="closeModal('modalIosGuide')">✕</button>
+        </div>
+        <div style="padding: 10px 0; text-align: center;">
+          <div style="font-size: 38px; margin-bottom: 6px;">📲</div>
+          <h4 style="font-size: 15px; font-weight: 800; color: #0f172a; margin-bottom: 12px;">نصب به صورت اپلیکیشن مستقل (بدون نوار مرورگر)</h4>
+          
+          <div class="ios-step-box">
+            <div class="ios-step-number">۱</div>
+            <div class="ios-step-text">
+              در مرورگر <strong>Safari آیفون</strong> در پایین صفحه روی دکمه اشتراک‌گذاری 
+              <span style="font-size: 17px; color: #2563eb;">⎋</span> (Share) بزنید.
+            </div>
+          </div>
+
+          <div class="ios-step-box">
+            <div class="ios-step-number">۲</div>
+            <div class="ios-step-text">
+              در منوی باز شده به پایین اسکرول کرده و گزینه <strong>Add to Home Screen ⊞ (افزودن به صفحه اصلی)</strong> را انتخاب کنید.
+            </div>
+          </div>
+
+          <div class="ios-step-box">
+            <div class="ios-step-number">۳</div>
+            <div class="ios-step-text">
+              در گوشه بالای صفحه روی دکمه <strong>Add</strong> بزنید. آیکون برنامه مستقیماً روی صفحه آیفون قرار گرفته و مثل یک اپلیکیشن بومی اجرا خواهد شد!
+            </div>
+          </div>
+
+          <button type="button" class="btn-primary" style="margin-top: 14px;" onclick="closeModal('modalIosGuide')">
+            متوجه شدم 👍
+          </button>
+        </div>
       </div>
     </div>
 
