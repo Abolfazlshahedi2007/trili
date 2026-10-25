@@ -1565,3 +1565,12 @@ async function confirmAndExecuteSettlement() {
     alert('خطا: ' + err.message);
   }
 }
+
+function downloadDatabaseBackup() {
+  if (appState.role !== 'owner') {
+    alert('فقط مالک مجاز به دریافت فایل پشتیبان دیتابیس است.');
+    return;
+  }
+  showToast('در حال دریافت و دانلود فایل پشتیبان دیتابیس...');
+  window.location.href = '/api/backup/download?role=owner';
+}
