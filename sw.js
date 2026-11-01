@@ -1,9 +1,14 @@
-const CACHE_NAME = 'trili-cache-v4';
+const CACHE_NAME = 'trili-cache-v16';
 const ASSETS = [
-  '/',
-  '/manifest.json',
-  '/css/style.css',
-  '/js/app.js'
+  './',
+  './index.html',
+  './manifest.json',
+  './css/style.css',
+  './js/app.js',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/icon-180.png',
+  './favicon.ico'
 ];
 
 self.addEventListener('install', (e) => {
@@ -26,15 +31,17 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 
-// Network-First Strategy for fresh updates with offline fallback
+// Cache-First with Network Revalidation for assets, Offline Fallback for Navigation
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
 
-  // API calls: Network first with offline JSON fallback
-  if (e.request.url.includes('/api/')) {
+  const url = new URL(e.request.url);
+
+  // API calls: Network first with graceful offline JSON fallback
+  if (url.pathname.includes('/api/')) {
     e.respondWith(
       fetch(e.request).catch(() => {
-        return new Response(JSON.stringify({ offline: true, message: 'دستگاه شما در حالت آفلاین است' }), {
+        return new Response(JSON.stringify({ offline: true, message: 'دستگاه در حالت آفلاین است' }), {
           headers: { 'Content-Type': 'application/json' }
         });
       })
@@ -42,20 +49,53 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // Web pages & assets: Network First, fallback to Cache
-  e.respondWith(
-    fetch(e.request)
-      .then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200) {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(e.request, responseToCache);
-          });
+  // Navigation requests: Cache first, then Network
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      caches.match(e.request, { ignoreSearch: true }).then((cached) => {
+        if (cached) {
+          // Revalidate in background
+          fetch(e.request).then((networkRes) => {
+            if (networkRes && networkRes.status === 200) {
+              caches.open(CACHE_NAME).then((c) => c.put(e.request, networkRes));
+            }
+          }).catch(() => {});
+          return cached;
         }
-        return networkResponse;
+        return fetch(e.request).then((networkRes) => {
+          if (networkRes && networkRes.status === 200) {
+            const clone = networkRes.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(e.request, clone));
+          }
+          return networkRes;
+        }).catch(async () => {
+          return (await caches.match('./', { ignoreSearch: true })) ||
+                 (await caches.match('./index.html', { ignoreSearch: true })) ||
+                 new Response('Offline');
+        });
       })
-      .catch(() => {
-        return caches.match(e.request);
-      })
+    );
+    return;
+  }
+
+  // Static Assets (CSS, JS, Icons): Cache First with background revalidation
+  e.respondWith(
+    caches.match(e.request, { ignoreSearch: true }).then((cached) => {
+      if (cached) {
+        fetch(e.request).then((networkRes) => {
+          if (networkRes && networkRes.status === 200) {
+            caches.open(CACHE_NAME).then((c) => c.put(e.request, networkRes));
+          }
+        }).catch(() => {});
+        return cached;
+      }
+      return fetch(e.request).then((networkRes) => {
+        if (networkRes && networkRes.status === 200) {
+          const clone = networkRes.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(e.request, clone));
+        }
+        return networkRes;
+      });
+    })
   );
 });
