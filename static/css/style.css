@@ -68,82 +68,191 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
 }
 
 .app-title-box {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
 }
 
 .app-logo-badge {
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   background: rgba(37, 99, 235, 0.25);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
+  font-size: 21px;
+  flex-shrink: 0;
+}
+
+.app-title-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.app-title-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .app-title {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 800;
   letter-spacing: -0.3px;
+  white-space: nowrap;
+}
+
+.app-meta-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
 }
 
 .app-subtitle {
   font-size: 11px;
   color: #94a3b8;
-  margin-top: 2px;
+  white-space: nowrap;
 }
 
-/* Iranian License Plate Component */
+.header-meta-sep {
+  color: #475569;
+  font-size: 9px;
+}
+
+/* =================================================================
+   AUTHENTIC IRANIAN COMMERCIAL TRUCK LICENSE PLATE (پلاک زرد تریلی)
+   ================================================================= */
 .iran-plate {
   display: inline-flex;
   direction: ltr;
   align-items: center;
-  background: #f8fafc;
-  border: 2px solid #0f172a;
-  border-radius: 6px;
-  height: 28px;
-  font-weight: 700;
-  font-size: 12px;
+  background: #facc15; /* Authentic Commercial Heavy Freight Yellow */
+  background: linear-gradient(180deg, #fde047 0%, #facc15 50%, #eab308 100%);
+  border: 2px solid #111827;
+  border-radius: 7px;
+  height: 35px;
   overflow: hidden;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.8), 0 3px 8px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  user-select: none;
+  font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
+.iran-plate:hover {
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.9), 0 5px 12px rgba(250, 204, 21, 0.35);
+}
+
+.iran-plate:active {
+  transform: scale(0.96);
+}
+
+/* 1. Blue Flag Strip */
 .plate-blue-flag {
   background: #1d4ed8;
   color: white;
-  width: 20px;
+  width: 22px;
   height: 100%;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  font-size: 8px;
+  padding: 1px 1px;
+  flex-shrink: 0;
+  border-right: 1.5px solid #111827;
 }
 
-.plate-middle {
-  padding: 0 6px;
-  color: #0f172a;
-  display: flex;
-  gap: 3px;
-  align-items: center;
-}
-
-.plate-iran {
-  border-left: 2px solid #0f172a;
-  padding: 0 6px;
-  background: #e2e8f0;
-  color: #0f172a;
+.flag-mini-ir {
   font-size: 10px;
+  line-height: 1;
+}
+
+.flag-ir-text {
+  font-size: 6px;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+  letter-spacing: -0.3px;
+  color: #ffffff;
+  margin-top: 1px;
+  font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+}
+
+/* 2. Middle Numbers & Letter */
+.plate-middle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 7px;
+  gap: 5px;
+  color: #111827;
+  font-weight: 900;
+  height: 100%;
+}
+
+.plate-num-item {
+  font-size: 15.5px;
+  font-weight: 900;
+  color: #111827;
+  letter-spacing: 0.5px;
+  line-height: 1;
+}
+
+.plate-letter-item {
+  font-size: 14.5px;
+  font-weight: 900;
+  color: #111827;
+  line-height: 1;
+  background: rgba(0, 0, 0, 0.08);
+  padding: 1px 4px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 3. Iran City Box */
+.plate-iran {
+  border-left: 2px solid #111827;
+  background: rgba(0, 0, 0, 0.04);
+  width: 32px;
   height: 100%;
   display: flex;
+  flex-direction: column;
+  justify-content: center;
   align-items: center;
+  padding: 1px 2px;
+  flex-shrink: 0;
+}
+
+.plate-iran-label {
+  font-size: 7.5px;
+  font-weight: 900;
+  color: #111827;
+  line-height: 1;
+  margin-bottom: 2px;
+  letter-spacing: -0.2px;
+}
+
+.plate-city-item {
+  font-size: 13.5px;
+  font-weight: 900;
+  color: #111827;
+  line-height: 1;
+  letter-spacing: 0.5px;
 }
 
 /* Role Selector Toggle Bar */
@@ -468,6 +577,163 @@ body {
   color: #b91c1c;
 }
 
+/* =================================================================
+   VISUAL ROUTE TICKET CARD (کارت گرافیکی بارنامه و مسیر)
+   ================================================================= */
+.route-ticket-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
+  position: relative;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  overflow: hidden;
+}
+
+.route-ticket-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  border-color: #cbd5e1;
+}
+
+.ticket-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.ticket-bill-badge {
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid #bfdbfe;
+}
+
+.ticket-road-track {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  margin: 10px 0 16px 0;
+  padding: 0 6px;
+}
+
+.city-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 2;
+  min-width: 65px;
+}
+
+.city-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #2563eb;
+  border: 3px solid #ffffff;
+  box-shadow: 0 0 0 2px #2563eb;
+}
+
+.city-dot-dest {
+  background: #10b981;
+  box-shadow: 0 0 0 2px #10b981;
+}
+
+.city-name {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-top: 5px;
+  text-align: center;
+}
+
+.road-dashed-line {
+  flex: 1;
+  height: 2px;
+  border-top: 2px dashed #94a3b8;
+  position: relative;
+  margin: 0 10px;
+  top: -10px;
+}
+
+.truck-transit-icon {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ffffff;
+  padding: 1px 6px;
+  border-radius: 12px;
+  font-size: 15px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e2e8f0;
+}
+
+.ticket-metrics-bar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 10px 8px;
+  text-align: center;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 12px;
+}
+
+.ticket-metric-box {
+  display: flex;
+  flex-direction: column;
+}
+
+.ticket-metric-title {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.ticket-metric-val {
+  font-size: 13px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-top: 3px;
+}
+
+.ticket-metric-val.val-success {
+  color: #16a34a;
+}
+
+.ticket-metric-val.val-warning {
+  color: #dc2626;
+}
+
+.ticket-metric-val.val-muted {
+  color: #94a3b8;
+}
+
+.ticket-footer-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 10px;
+  border-top: 1px dashed #e2e8f0;
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+.ticket-meta-info {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
 /* Empty State */
 .empty-state {
   text-align: center;
@@ -506,16 +772,26 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   color: #64748b;
   text-decoration: none;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
-  padding: 4px 8px;
+  padding: 4px 2px;
   border-radius: 8px;
   flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
+.nav-item span {
+  white-space: nowrap;
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .nav-item.active {
@@ -622,6 +898,34 @@ body {
 .form-input:focus, .form-select:focus, .form-textarea:focus {
   border-color: #2563eb;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* File Upload Input Styling */
+input[type="file"].form-input {
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  background: #f8fafc;
+}
+
+input[type="file"]::file-selector-button {
+  background: #2563eb;
+  color: white;
+  border: none;
+  padding: 7px 14px;
+  border-radius: 8px;
+  margin-left: 10px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+input[type="file"]::file-selector-button:hover {
+  background: #1d4ed8;
 }
 
 .form-row {
@@ -967,4 +1271,779 @@ body {
   font-size: 13px;
   color: #334155;
   line-height: 1.5;
+}
+
+/* Offline & Storage Badge */
+.storage-mode-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #10b981;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 20px;
+}
+.storage-mode-pill.offline {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #60a5fa;
+}
+
+/* Truck Oil & Service Card in Dashboard */
+.oil-widget-card {
+  margin: 14px 16px;
+  background: linear-gradient(145deg, #1e293b 0%, #0f172a 100%);
+  border: 1px solid #334155;
+  border-radius: 18px;
+  padding: 16px;
+  color: white;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+.oil-widget-card::before {
+  content: '🛢️';
+  position: absolute;
+  left: -10px;
+  bottom: -15px;
+  font-size: 80px;
+  opacity: 0.07;
+  pointer-events: none;
+}
+
+.oil-widget-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.oil-widget-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  font-size: 14px;
+  color: #f8fafc;
+}
+
+.oil-status-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+.oil-status-good {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+.oil-status-warning {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+.oil-status-danger {
+  background: rgba(239, 68, 68, 0.25);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  animation: pulse 2s infinite;
+}
+
+.oil-km-highlight {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.oil-km-val {
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  color: #38bdf8;
+}
+
+.oil-progress-track {
+  width: 100%;
+  height: 9px;
+  background: #334155;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.oil-progress-bar {
+  height: 100%;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #10b981 0%, #38bdf8 100%);
+  transition: width 0.4s ease;
+}
+.oil-progress-bar.warning {
+  background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%);
+}
+.oil-progress-bar.danger {
+  background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+}
+
+.oil-details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 10px;
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+.oil-detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.oil-detail-label {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.oil-detail-value {
+  color: #f1f5f9;
+  font-weight: 700;
+}
+
+/* Service Log List Items */
+.service-item-card {
+  background: white;
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+  position: relative;
+}
+
+.service-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 8px;
+}
+
+.filter-pills-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.filter-tag-badge {
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Checkbox group inside Modal */
+.checkbox-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.checkbox-pill-label {
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  background: #f8fafc;
+  user-select: none;
+}
+
+.checkbox-pill-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #2563eb;
+}
+
+/* Service & Workshop Segment Control */
+.segment-control-bar {
+  display: flex;
+  background: #f1f5f9;
+  border-radius: 14px;
+  padding: 4px;
+  margin: 0 16px 14px 16px;
+  border: 1px solid #e2e8f0;
+}
+
+.segment-btn {
+  flex: 1;
+  padding: 8px 6px;
+  font-size: 12px;
+  font-weight: 700;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.segment-btn.active {
+  background: white;
+  color: #0f172a;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.segment-btn.active.repair-mode {
+  color: #ea580c;
+}
+
+/* Modal Mode Switcher Tabs */
+.service-modal-mode-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  background: #f8fafc;
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.mode-tab-btn {
+  flex: 1;
+  border: none;
+  padding: 9px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  background: transparent;
+  color: #64748b;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.mode-tab-btn.active-service {
+  background: #0284c7;
+  color: white;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.25);
+}
+
+.mode-tab-btn.active-repair {
+  background: #ea580c;
+  color: white;
+  box-shadow: 0 2px 8px rgba(234, 88, 12, 0.25);
+}
+
+/* Workshop Badges and Tags */
+.badge-repair {
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #ffedd5;
+  font-weight: 700;
+}
+
+.badge-service-fluid {
+  background: #f0f9ff;
+  color: #0369a1;
+  border: 1px solid #e0f2fe;
+  font-weight: 700;
+}
+
+.shop-tag-pill {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* =================================================================
+   Shamsi Date Picker & Input Styles (Touch Friendly for iPhone)
+   ================================================================= */
+.input-with-icon-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  width: 100%;
+}
+
+.input-with-icon-wrapper input.date-input-picker {
+  cursor: pointer;
+  background-color: #f8fafc;
+  padding-left: 36px;
+  user-select: none;
+  -webkit-user-select: none;
+  width: 100%;
+}
+
+.input-picker-icon {
+  position: absolute;
+  left: 12px;
+  font-size: 16px;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+.date-quick-chips {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.date-quick-chip {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.date-quick-chip:hover, .date-quick-chip.active {
+  background: #0284c7;
+  color: white;
+  border-color: #0284c7;
+}
+
+.date-wheel-selectors {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.date-wheel-box {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.date-wheel-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-align: center;
+}
+
+.date-wheel-select {
+  width: 100%;
+  padding: 8px 6px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  background: white;
+  text-align: center;
+  outline: none;
+  height: 42px;
+}
+
+.date-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.date-grid-day-btn {
+  aspect-ratio: 1;
+  border: 1px solid #e2e8f0;
+  background: white;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  min-height: 38px;
+}
+
+.date-grid-day-btn:hover {
+  background: #f0f9ff;
+  border-color: #0284c7;
+}
+
+.date-grid-day-btn.selected {
+  background: #0284c7;
+  color: white;
+  border-color: #0284c7;
+  font-weight: 900;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.35);
+}
+
+.date-grid-day-btn.today-highlight {
+  border: 2px solid #ea580c;
+}
+
+.date-grid-day-btn:disabled {
+  opacity: 0.25;
+  pointer-events: none;
+  background: #f8fafc;
+}
+
+.date-selected-preview-banner {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  padding: 10px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: #166534;
+  margin-bottom: 12px;
+}
+
+/* =================================================================
+   Authentic Iranian Truck Commercial Plate (پلاک زرد عمومی تریلی)
+   ================================================================= */
+.iran-plate-wrapper {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0;
+  width: 100%;
+}
+
+.iran-plate-truck {
+  display: flex;
+  align-items: center;
+  background: #facc15; /* Authentic Commercial Public Truck Yellow */
+  border: 3px solid #111827;
+  border-radius: 10px;
+  box-shadow: inset 0 2px 4px rgba(255,255,255,0.7), 0 4px 12px rgba(0,0,0,0.15);
+  overflow: hidden;
+  direction: ltr; /* Plates are visually laid out LTR */
+  width: 100%;
+  max-width: 380px;
+  height: 64px;
+}
+
+.plate-blue-strip {
+  width: 38px;
+  height: 100%;
+  background: #1d4ed8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  padding: 4px 2px;
+  border-right: 2px solid #111827;
+  flex-shrink: 0;
+}
+
+.plate-flag-strip {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.plate-ir-text {
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1.1;
+  text-align: center;
+  letter-spacing: -0.5px;
+  margin-top: 2px;
+}
+
+.plate-part-box {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.plate-digit-input {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: transparent;
+  text-align: center;
+  font-size: 26px;
+  font-weight: 900;
+  color: #111827;
+  font-family: inherit;
+  outline: none;
+  padding: 0;
+}
+
+.plate-digit-input::placeholder {
+  color: rgba(17, 24, 39, 0.3);
+}
+
+.plate-letter-box {
+  flex: 1.2;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
+
+.plate-letter-dropdown {
+  width: 100%;
+  height: 44px;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1.5px solid #111827;
+  border-radius: 8px;
+  font-size: 18px;
+  font-weight: 900;
+  color: #111827;
+  text-align: center;
+  outline: none;
+  cursor: pointer;
+  direction: rtl;
+}
+
+.plate-divider {
+  width: 2.5px;
+  height: 80%;
+  background: #111827;
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
+.plate-iran-box {
+  width: 60px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 4px;
+  flex-shrink: 0;
+}
+
+.plate-iran-title {
+  font-size: 10.5px;
+  font-weight: 900;
+  color: #111827;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.plate-city-input {
+  font-size: 20px !important;
+  height: 28px !important;
+}
+
+/* =================================================================
+   Payments Export Toolbar & Printable PDF Styles
+   ================================================================= */
+.payments-export-bar {
+  display: flex;
+  gap: 8px;
+  padding: 0 16px 12px 16px;
+}
+
+.btn-export-excel {
+  flex: 1;
+  background: #f0fdf4;
+  border: 1.5px solid #22c55e;
+  color: #15803d;
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  min-height: 44px;
+  transition: all 0.2s;
+}
+
+.btn-export-excel:active, .btn-export-excel:hover {
+  background: #22c55e;
+  color: white;
+}
+
+.btn-export-pdf {
+  flex: 1;
+  background: #fef2f2;
+  border: 1.5px solid #ef4444;
+  color: #b91c1c;
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  min-height: 44px;
+  transition: all 0.2s;
+}
+
+.btn-export-pdf:active, .btn-export-pdf:hover {
+  background: #ef4444;
+  color: white;
+}
+
+.print-report-sheet {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  color: #0f172a;
+}
+
+.report-print-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  margin: 12px 0;
+}
+
+.report-print-table th, .report-print-table td {
+  border: 1px solid #cbd5e1;
+  padding: 6px 6px;
+  text-align: center;
+}
+
+.report-print-table th {
+  background: #f1f5f9;
+  font-weight: 800;
+}
+
+/* Header & Plate Mobile Optimization */
+@media (max-width: 420px) {
+  .header-row {
+    gap: 8px;
+  }
+  .app-title {
+    font-size: 16px;
+  }
+  .iran-plate {
+    height: 33px;
+  }
+  .plate-blue-flag {
+    width: 20px;
+  }
+  .plate-middle {
+    padding: 0 5px;
+    gap: 4px;
+  }
+  .plate-num-item {
+    font-size: 14.5px;
+  }
+  .plate-letter-item {
+    font-size: 13.5px;
+    padding: 1px 3px;
+  }
+  .plate-iran {
+    width: 29px;
+  }
+  .plate-city-item {
+    font-size: 12.5px;
+  }
+}
+
+@media (max-width: 360px) {
+  .top-header {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  .app-logo-badge {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+  .app-title {
+    font-size: 14.5px;
+  }
+  .iran-plate {
+    height: 31px;
+  }
+  .plate-middle {
+    padding: 0 4px;
+    gap: 3px;
+  }
+  .plate-num-item {
+    font-size: 13.5px;
+  }
+  .plate-letter-item {
+    font-size: 12.5px;
+  }
+  .plate-city-item {
+    font-size: 11.5px;
+  }
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #printAreaContainer, #printAreaContainer * {
+    visibility: visible;
+  }
+  #printAreaContainer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 10mm;
+    background: white;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* Settlement History and Hub Enhancements */
+.settlement-modal-tabs {
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 12px;
+  display: flex;
+  gap: 6px;
+}
+
+.settlement-modal-tabs .mode-tab-btn {
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  transition: all 0.2s ease;
+}
+
+.settlement-modal-tabs .mode-tab-btn.active-service {
+  background: #0f172a;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.25);
 }

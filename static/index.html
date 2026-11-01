@@ -6,7 +6,7 @@
   <title>حسابدار تریلی و راننده</title>
   
   <!-- PWA & Apple iOS Native Meta Tags -->
-  <link rel="manifest" href="/manifest.json">
+  <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0f172a">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -14,14 +14,15 @@
   <meta name="apple-mobile-web-app-title" content="حسابدار تریلی">
   
   <!-- Apple Touch Icons for iPhone Home Screen -->
-  <link rel="icon" type="image/png" href="/icons/icon-192.png">
-  <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-192.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-192.png">
-  <link rel="apple-touch-icon" sizes="167x167" href="/icons/icon-192.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="shortcut icon" href="favicon.ico">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="167x167" href="icons/icon-192.png">
 
   <!-- CSS -->
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
@@ -32,23 +33,39 @@
       <div class="header-row">
         <div class="app-title-box">
           <div class="app-logo-badge" id="appLogoBadge">🚛</div>
-          <div>
-            <div class="app-title" id="appMainTitle">حسابدار تریلی</div>
-            <div class="app-subtitle" id="headerSubtitle">نسخه راننده</div>
+          <div class="app-title-content">
+            <div class="app-title-line">
+              <span class="app-title" id="appMainTitle">حسابدار تریلی</span>
+            </div>
+            <div class="app-meta-line">
+              <span class="app-subtitle" id="headerSubtitle">نسخه راننده</span>
+            </div>
           </div>
         </div>
         
-        <!-- Iranian License Plate View -->
-        <div class="iran-plate" id="headerPlate" onclick="handlePlateClick()" title="مشاهده پلاک">
-          <div class="plate-blue-flag">I.R.</div>
-          <div class="plate-middle" id="plateDisplay">۱۲ ع ۳۴۵</div>
-          <div class="plate-iran" id="plateCityDisplay">ایران ۲۱</div>
+        <!-- Iranian License Plate View (Authentic Commercial Truck Yellow Plate) -->
+        <div class="iran-plate" id="headerPlate" onclick="handlePlateClick()" title="مشاهده و ویرایش مشخصات تریلی">
+          <div class="plate-blue-flag">
+            <span class="flag-mini-ir">🇮🇷</span>
+            <span class="flag-ir-text">I.R.<br>IRAN</span>
+          </div>
+          <div class="plate-middle">
+            <span class="plate-num-item" id="plateHeaderP1">۱۲</span>
+            <span class="plate-letter-item" id="plateHeaderLetter">ع</span>
+            <span class="plate-num-item" id="plateHeaderP2">۳۴۵</span>
+            <span id="plateDisplay" style="display:none;">۱۲ ع ۳۴۵</span>
+          </div>
+          <div class="plate-iran">
+            <span class="plate-iran-label">ایران</span>
+            <span class="plate-city-item" id="plateHeaderCity">۲۱</span>
+            <span id="plateCityDisplay" style="display:none;">ایران ۲۱</span>
+          </div>
         </div>
       </div>
 
       <!-- Role Access Bar -->
       <div class="role-toggle-bar" id="roleStatusBanner">
-        <!-- Will be dynamically populated: either 'ورود به پنل پدر' button or 'پنل مالک + خروج' -->
+        <!-- Will be dynamically populated: either 'ورود به پنل مالک' button or 'پنل مالک + خروج' -->
       </div>
     </header>
 
@@ -57,7 +74,7 @@
     <!-- 0. DEDICATED LOGIN VIEW -->
     <main id="viewLogin" class="view-section login-screen" style="display:none;">
       <div class="login-header">
-        <div class="login-logo">🚛</div>
+        <div class="login-logo"><img src="/icons/icon-192.png" alt="لوگو تریلی" style="width:100%; height:100%; border-radius:18px; object-fit:cover; box-shadow:0 4px 12px rgba(0,0,0,0.3);"></div>
         <h1 class="login-title">سامانه مالی و حسابداری تریلی</h1>
         <p class="login-subtitle">جهت ورود به برنامه، نقش خود را انتخاب نمایید:</p>
       </div>
@@ -86,7 +103,7 @@
           <div class="role-card-header">
             <div class="role-icon-box icon-owner">👑</div>
             <div>
-              <div class="role-card-title">ورود به عنوان صاحب ماشین (پدر)</div>
+              <div class="role-card-title">ورود به عنوان صاحب ماشین (مالک)</div>
               <span class="badge-tag badge-owner">مدیریت کامل و محرمانه</span>
             </div>
           </div>
@@ -96,7 +113,7 @@
           
           <form onsubmit="handleOwnerLoginDirect(event)">
             <div class="form-group" style="margin-bottom: 12px;">
-              <label class="form-label">رمز عبور مدیریت پدر (پین‌کد):</label>
+              <label class="form-label">رمز عبور مدیریت مالک (پین‌کد):</label>
               <input type="password" id="loginOwnerPin" class="form-input" placeholder="رمز ۴ رقمی (پیش‌فرض: 1234)" style="text-align: center; font-size: 18px; letter-spacing: 4px; font-weight: 800;" maxlength="10" required>
               <div id="loginPinError" style="color: #ef4444; font-size: 12px; margin-top: 4px; display: none;">❌ رمز عبور نادرست است!</div>
             </div>
@@ -163,10 +180,63 @@
 
           <div class="metric-item">
             <div class="metric-label">
-              <span>💳 مساعده واریزی پدر</span>
+              <span>💳 مساعده دریافتی از مالک</span>
             </div>
             <div class="metric-val color-red" id="dashAdvancesPaid">- ۰ ت</div>
           </div>
+        </div>
+      </div>
+
+      <!-- Truck Maintenance & Oil Service Widget -->
+      <div class="oil-widget-card" id="dashOilCard">
+        <div class="oil-widget-header">
+          <div class="oil-widget-title">
+            <span>🛢️</span>
+            <span>دفترچه و موعد تعویض روغن تریلی</span>
+          </div>
+          <span class="oil-status-badge oil-status-good" id="dashOilStatusBadge">🟢 وضعیت عادی</span>
+        </div>
+
+        <div class="oil-km-highlight">
+          <div>
+            <span class="oil-km-val" id="dashOilRemainingKm">--</span>
+            <span style="font-size: 13px; color: #94a3b8; margin-right: 4px;">کیلومتر مانده</span>
+          </div>
+          <span style="font-size: 11px; color: #cbd5e1;" id="dashOilLifeText">تا تعویض بعدی</span>
+        </div>
+
+        <div class="oil-progress-track">
+          <div class="oil-progress-bar" id="dashOilProgressBar" style="width: 100%;"></div>
+        </div>
+
+        <div class="oil-details-grid">
+          <div class="oil-detail-row">
+            <span class="oil-detail-label">کیلومتر آخرین تعویض:</span>
+            <span class="oil-detail-value" id="dashOilCurrentKm">--</span>
+          </div>
+          <div class="oil-detail-row">
+            <span class="oil-detail-label">کیلومتر تعویض بعدی:</span>
+            <span class="oil-detail-value" id="dashOilNextKm">--</span>
+          </div>
+          <div class="oil-detail-row">
+            <span class="oil-detail-label">برند و نوع روغن:</span>
+            <span class="oil-detail-value" id="dashOilBrand">--</span>
+          </div>
+          <div class="oil-detail-row">
+            <span class="oil-detail-label">تاریخ آخرین سرویس:</span>
+            <span class="oil-detail-value" id="dashOilDate">--</span>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+          <button type="button" class="btn-sm-action" style="color: #38bdf8; padding: 4px 0;" onclick="switchNav('services')">
+            <span>📋</span>
+            <span>مشاهده دفترچه و سوابق ←</span>
+          </button>
+          <button type="button" class="btn-primary" style="width: auto; padding: 6px 14px; font-size: 12px; background: #0284c7;" onclick="openServiceModal()">
+            <span>+</span>
+            <span>ثبت سرویس / تعویض روغن</span>
+          </button>
         </div>
       </div>
 
@@ -174,15 +244,23 @@
       <div class="quick-actions-bar">
         <div class="quick-btn" onclick="openTripModal()">
           <div class="quick-btn-icon btn-icon-blue">📦</div>
-          <span>ثبت بار جدید</span>
+          <span>ثبت بار</span>
         </div>
         <div class="quick-btn" onclick="openExpenseModal()">
           <div class="quick-btn-icon btn-icon-amber">⛽</div>
-          <span>ثبت خرجی راه</span>
+          <span>خرجی راه</span>
+        </div>
+        <div class="quick-btn" onclick="openServiceModal('service')">
+          <div class="quick-btn-icon btn-icon-blue" style="background:#e0f2fe; color:#0284c7;">🛢️</div>
+          <span>تعویض روغن</span>
+        </div>
+        <div class="quick-btn" onclick="openServiceModal('repair')">
+          <div class="quick-btn-icon" style="background:#ffedd5; color:#ea580c;">🔧</div>
+          <span>تعمیرگاه</span>
         </div>
         <div class="quick-btn" id="quickBtnPayment" onclick="openPaymentModal()">
           <div class="quick-btn-icon btn-icon-green">💳</div>
-          <span>ثبت مساعده</span>
+          <span>واریزی</span>
         </div>
       </div>
 
@@ -200,11 +278,22 @@
       </div>
       <div class="card-list" id="dashExpensesList"></div>
 
-      <!-- Settlement CTA Banner (Owner only) -->
-      <div id="dashSettlementContainer" style="padding: 20px 16px;">
-        <button class="btn-primary btn-success" onclick="openSettlementPreviewModal()">
+      <!-- Settlement CTA Banner & History Link (Owner & Driver) -->
+      <div id="dashSettlementContainer" style="padding: 16px 16px 20px 16px;">
+        <button type="button" class="btn-primary btn-success" onclick="openSettlementPreviewModal()" style="box-shadow: 0 4px 14px rgba(22, 163, 74, 0.3);">
           <span>📑</span>
           <span>محاسبه و صدور صورت‌حساب تسویه</span>
+        </button>
+        <button type="button" class="btn-secondary" style="margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; border: 1.5px solid #cbd5e1; background: #ffffff; color: #1e293b; font-weight: 700; font-size: 13px; padding: 11px; border-radius: 12px; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.04);" onclick="switchNav('settlements')">
+          <span>📜</span>
+          <span>مشاهده تاریخچه تسویه‌های گذشته (<span id="dashSettlementCountBadge">۰ دوره</span>)</span>
+        </button>
+      </div>
+
+      <div id="driverSettlementContainer" style="padding: 10px 16px 20px 16px; display: none;">
+        <button type="button" class="btn-secondary" style="display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; border: 1.5px solid #cbd5e1; background: #ffffff; color: #1e293b; font-weight: 700; font-size: 13px; padding: 11px; border-radius: 12px; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.04);" onclick="switchNav('settlements')">
+          <span>📑</span>
+          <span>مشاهده تاریخچه صورت‌حساب‌های تسویه‌شده (<span id="driverDashSettlementCountBadge">۰ دوره</span>)</span>
         </button>
       </div>
 
@@ -214,16 +303,16 @@
     <main id="viewTrips" class="view-section" style="display:none; padding-top: 16px;">
       <div class="section-header">
         <div class="section-title">لیست بارها و بارنامه‌ها</div>
-        <button class="btn-primary" style="width: auto; padding: 6px 14px; font-size: 13px;" onclick="openTripModal()">
+        <button type="button" class="btn-primary" style="width: auto; padding: 6px 14px; font-size: 13px;" onclick="openTripModal()">
           + بار جدید
         </button>
       </div>
 
       <!-- Filter tabs -->
       <div style="display: flex; gap: 8px; padding: 0 16px 14px 16px; overflow-x: auto;">
-        <button class="badge-tag badge-unsettled" style="border:none; cursor:pointer;" onclick="filterTrips('unsettled')">تسویه نشده‌ها</button>
-        <button class="badge-tag badge-owner" style="border:none; cursor:pointer;" onclick="filterTrips('settled')">تسویه شده‌ها</button>
-        <button class="badge-tag badge-owner" style="border:none; cursor:pointer;" onclick="filterTrips('all')">همه بارها</button>
+        <button type="button" class="badge-tag badge-unsettled" style="border:none; cursor:pointer;" onclick="filterTrips('unsettled')">تسویه نشده‌ها</button>
+        <button type="button" class="badge-tag badge-owner" style="border:none; cursor:pointer;" onclick="filterTrips('settled')">تسویه شده‌ها</button>
+        <button type="button" class="badge-tag badge-owner" style="border:none; cursor:pointer;" onclick="filterTrips('all')">همه بارها</button>
       </div>
 
       <div class="card-list" id="allTripsList"></div>
@@ -233,16 +322,16 @@
     <main id="viewExpenses" class="view-section" style="display:none; padding-top: 16px;">
       <div class="section-header">
         <div class="section-title">مخارج، سوخت و تعمیرات</div>
-        <button class="btn-primary" style="width: auto; padding: 6px 14px; font-size: 13px;" onclick="openExpenseModal()">
+        <button type="button" class="btn-primary" style="width: auto; padding: 6px 14px; font-size: 13px;" onclick="openExpenseModal()">
           + ثبت هزینه
         </button>
       </div>
 
       <!-- Filter tabs -->
       <div style="display: flex; gap: 8px; padding: 0 16px 14px 16px; overflow-x: auto;">
-        <button class="badge-tag badge-driver" style="border:none; cursor:pointer;" onclick="filterExpenses('driver')">پرداخت راننده (طلب)</button>
-        <button class="badge-tag badge-owner" style="border:none; cursor:pointer;" onclick="filterExpenses('owner')">پرداخت پدر (ماشین)</button>
-        <button class="badge-tag badge-unsettled" style="border:none; cursor:pointer;" onclick="filterExpenses('all')">همه خرج‌ها</button>
+        <button type="button" class="badge-tag badge-driver" style="border:none; cursor:pointer;" onclick="filterExpenses('driver')">پرداخت راننده (طلب)</button>
+        <button type="button" class="badge-tag badge-owner" style="border:none; cursor:pointer;" onclick="filterExpenses('owner')">پرداخت مالک (ماشین)</button>
+        <button type="button" class="badge-tag badge-unsettled" style="border:none; cursor:pointer;" onclick="filterExpenses('all')">همه خرج‌ها</button>
       </div>
 
       <div class="card-list" id="allExpensesList"></div>
@@ -252,7 +341,7 @@
     <main id="viewPayments" class="view-section" style="display:none; padding-top: 16px;">
       <div class="section-header">
         <div class="section-title">واریزی‌ها و مساعده‌ها</div>
-        <button id="btnNewPayment" class="btn-primary" style="width: auto; padding: 6px 14px; font-size: 13px;" onclick="openPaymentModal()">
+        <button type="button" id="btnNewPayment" class="btn-primary" style="width: auto; padding: 6px 14px; font-size: 13px;" onclick="openPaymentModal()">
           + ثبت واریزی
         </button>
       </div>
@@ -270,24 +359,96 @@
 
       <!-- Filter tabs -->
       <div style="display: flex; gap: 8px; padding: 0 16px 14px 16px; overflow-x: auto;">
-        <button class="badge-tag badge-unsettled" style="border:none; cursor:pointer;" onclick="filterPayments('all')">همه واریزی‌ها</button>
-        <button id="tabPendingPayments" class="badge-tag badge-owner" style="border:none; cursor:pointer; background:#fef3c7; color:#b45309;" onclick="filterPayments('pending')">⏳ در انتظار تایید</button>
-        <button class="badge-tag badge-driver" style="border:none; cursor:pointer;" onclick="filterPayments('driver')">واریز راننده به مالک</button>
-        <button class="badge-tag badge-owner" style="border:none; cursor:pointer;" onclick="filterPayments('owner')">مساعده مالک به راننده</button>
+        <button type="button" class="badge-tag badge-unsettled" style="border:none; cursor:pointer;" onclick="filterPayments('all')">همه واریزی‌ها</button>
+        <button type="button" id="tabPendingPayments" class="badge-tag badge-owner" style="border:none; cursor:pointer; background:#fef3c7; color:#b45309;" onclick="filterPayments('pending')">⏳ در انتظار تایید</button>
+        <button type="button" class="badge-tag badge-driver" style="border:none; cursor:pointer;" onclick="filterPayments('driver')">واریز راننده به مالک</button>
+        <button type="button" class="badge-tag badge-owner" style="border:none; cursor:pointer;" onclick="filterPayments('owner')">مساعده مالک به راننده</button>
+      </div>
+
+      <!-- Export Toolbar for Payments (Excel & PDF) -->
+      <div class="payments-export-bar">
+        <button type="button" class="btn-export-excel" onclick="exportPaymentsExcel()">
+          <span>📊</span>
+          <span>خروجی اکسل (Excel)</span>
+        </button>
+        <button type="button" class="btn-export-pdf" onclick="openPaymentsReportModal()">
+          <span>📄</span>
+          <span>خروجی گزارش چاپی / PDF</span>
+        </button>
       </div>
 
       <div class="card-list" id="allPaymentsList"></div>
     </main>
 
-    <!-- 5. SETTLEMENTS HISTORY VIEW -->
+    <!-- 5. SETTLEMENTS & HISTORY VIEW -->
     <main id="viewSettlements" class="view-section" style="display:none; padding-top: 16px;">
       <div class="section-header">
-        <div class="section-title">تاریخچه تسویه‌حساب‌ها</div>
-        <button id="btnNewSettlement" class="btn-primary btn-success" style="width: auto; padding: 6px 14px; font-size: 13px;" onclick="openSettlementPreviewModal()">
-          تسویه جدید
+        <div class="section-title">تاریخچه و مدیریت تسویه‌حساب‌ها</div>
+        <button type="button" id="btnNewSettlement" class="btn-primary btn-success" style="width: auto; padding: 7px 14px; font-size: 13px;" onclick="openSettlementPreviewModal()">
+          + تسویه جدید
         </button>
       </div>
-      <div class="card-list" id="allSettlementsList"></div>
+
+      <!-- Segment Tabs: Archive History vs Current Period -->
+      <div style="display: flex; gap: 8px; padding: 0 16px 14px 16px;">
+        <button type="button" id="tabSetHistory" class="badge-tag badge-unsettled" style="border:none; cursor:pointer; font-weight:700; padding:6px 14px; font-size:12px;" onclick="filterSettlementView('history')">
+          📜 آرشیو تاریخچه تسویه‌ها (<span id="settlementHistoryCountBadge">۰</span>)
+        </button>
+        <button type="button" id="tabSetCurrent" class="badge-tag badge-owner" style="border:none; cursor:pointer; font-weight:700; padding:6px 14px; font-size:12px;" onclick="filterSettlementView('current')">
+          ⏳ وضعیت دوره جاری (در جریان)
+        </button>
+      </div>
+
+      <!-- Container 1: History Section -->
+      <div id="settlementsHistorySection">
+        <div style="padding: 0 16px 12px 16px;">
+          <input type="text" id="searchSettlementsInput" class="form-input" placeholder="🔍 جستجو در تاریخچه (تاریخ، عنوان یا مبلغ)..." oninput="handleSettlementSearch(this.value)" style="font-size: 12.5px; padding: 9px 12px; border-radius: 10px;">
+        </div>
+        <div class="card-list" id="allSettlementsList"></div>
+      </div>
+
+      <!-- Container 2: Current Period Live Status -->
+      <div id="settlementsCurrentSection" style="display: none; padding: 0 16px 20px 16px;">
+        <div id="settlementsCurrentOverviewCard"></div>
+      </div>
+    </main>
+
+    <!-- 6. SERVICES & WORKSHOP VIEW -->
+    <main id="viewServices" class="view-section" style="display:none; padding-top: 16px;">
+      <div class="section-header">
+        <div class="section-title">دفترچه سرویس و تعمیرگاه تریلی</div>
+        <div style="display: flex; gap: 6px;">
+          <button type="button" class="btn-primary" style="width: auto; padding: 6px 10px; font-size: 11.5px; background: #0284c7;" onclick="openServiceModal('service')">
+            + تعویض روغن
+          </button>
+          <button type="button" class="btn-primary" style="width: auto; padding: 6px 10px; font-size: 11.5px; background: #ea580c;" onclick="openServiceModal('repair')">
+            + ثبت تعمیرگاه
+          </button>
+        </div>
+      </div>
+
+      <!-- Segment control for Categories -->
+      <div class="segment-control-bar">
+        <button type="button" id="segBtnAll" class="segment-btn active" onclick="switchServiceCategory('all')">همه موارد</button>
+        <button type="button" id="segBtnService" class="segment-btn" onclick="switchServiceCategory('service')">🛢️ سرویس و روغن</button>
+        <button type="button" id="segBtnRepair" class="segment-btn repair-mode" onclick="switchServiceCategory('repair')">🔧 تعمیرگاه و قطعات</button>
+      </div>
+
+      <!-- Detailed filter pills -->
+      <div style="display: flex; gap: 8px; padding: 0 16px 14px 16px; overflow-x: auto;">
+        <button type="button" class="badge-tag badge-unsettled" style="border:none; cursor:pointer;" onclick="filterServices('all')">همه</button>
+        <button type="button" class="badge-tag badge-driver" style="border:none; cursor:pointer; background:#f0fdf4; color:#15803d;" onclick="filterServices('چرخ')">🛞 چرخ و بلبرینگ</button>
+        <button type="button" class="badge-tag badge-owner" style="border:none; cursor:pointer;" onclick="filterServices('روغن')">🛢️ روغن موتور</button>
+        <button type="button" class="badge-tag badge-driver" style="border:none; cursor:pointer;" onclick="filterServices('گیربکس')">⚙️ گیربکس و کلاچ</button>
+        <button type="button" class="badge-tag badge-owner" style="border:none; cursor:pointer;" onclick="filterServices('ترمز')">🛑 لنت و چرخ</button>
+        <button type="button" class="badge-tag badge-owner" style="border:none; cursor:pointer; background:#fff7ed; color:#c2410c;" onclick="filterServices('موتور')">🔧 تعمیر موتور</button>
+        <button type="button" class="badge-tag badge-driver" style="border:none; cursor:pointer;" onclick="filterServices('فنر')">🔩 زیربندی و فنر</button>
+        <button type="button" class="badge-tag badge-owner" style="border:none; cursor:pointer;" onclick="filterServices('باطری')">⚡ برق و باطری</button>
+        <button type="button" class="badge-tag badge-driver" style="border:none; cursor:pointer;" onclick="filterServices('لاستیک')">🛞 لاستیک</button>
+        <button type="button" class="badge-tag badge-owner" style="border:none; cursor:pointer;" onclick="filterServices('گریس')">🧈 گریس‌کاری</button>
+      </div>
+
+      <div class="card-list" id="allServicesList"></div>
     </main>
 
     <!-- BOTTOM NAVIGATION -->
@@ -304,9 +465,13 @@
         <div class="nav-icon">⛽</div>
         <span>خرج‌ها</span>
       </div>
+      <div class="nav-item" id="navServices" onclick="switchNav('services')">
+        <div class="nav-icon">🛠️</div>
+        <span>سرویس‌ها</span>
+      </div>
       <div class="nav-item" id="navPayments" onclick="switchNav('payments')">
         <div class="nav-icon">💳</div>
-        <span>مساعده‌ها</span>
+        <span>واریزی‌ها</span>
       </div>
       <div class="nav-item" id="navSettlements" onclick="switchNav('settlements')">
         <div class="nav-icon">📑</div>
@@ -316,12 +481,144 @@
 
     <!-- ==================== MODALS ==================== -->
 
+    <!-- MODAL: ADD SERVICE & WORKSHOP REPAIR -->
+    <div class="modal-overlay" id="modalService">
+      <div class="modal-sheet">
+        <div class="modal-header">
+          <div class="modal-title" id="modalServiceTitle">🛢️ ثبت تعویض روغن و سرویس تریلی</div>
+          <button type="button" class="modal-close-btn" onclick="closeModal('modalService')">✕</button>
+        </div>
+
+        <form id="formService" onsubmit="handleServiceSubmit(event)">
+          <input type="hidden" id="serviceCategory" value="service">
+
+          <!-- Category Switcher Tabs inside Modal -->
+          <div class="service-modal-mode-tabs">
+            <button type="button" id="tabModalModeService" class="mode-tab-btn active-service" onclick="setModalServiceMode('service')">
+              🛢️ سرویس دوره‌ای (روغن و مصرفی)
+            </button>
+            <button type="button" id="tabModalModeRepair" class="mode-tab-btn" onclick="setModalServiceMode('repair')">
+              🔧 تعمیرگاه و تعویض قطعه
+            </button>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" id="lblServiceType">نوع سرویس یا تعمیر انجام شده *</label>
+            <select id="serviceType" class="form-select" onchange="handleServiceTypeChange(this.value)" required>
+              <optgroup id="optgroupService" label="🛢️ سرویس‌های دوره‌ای و سیالات">
+                <option value="تعویض روغن موتور و فیلترها">🛢️ تعویض روغن موتور و فیلترها</option>
+                <option value="واسکازین گیربکس و دیفرانسیل">⚙️ واسکازین گیربکس و دیفرانسیل</option>
+                <option value="گریس‌کاری کامل چرخ‌ها و شاسی">🧈 گریس‌کاری کامل چرخ‌ها و شاسی</option>
+                <option value="سرویس کامل چرخ‌ها (بلبرینگ، کاسه‌نمد و رینگ)">🛞 سرویس کامل چرخ‌ها و بلبرینگ‌ها</option>
+                <option value="فیلتر خشک‌کن باد و رطوبت‌گیر">💨 فیلتر خشک‌کن باد و رطوبت‌گیر (APU)</option>
+                <option value="تعویض فیلترها">🔄 فقط تعویض فیلترها (روغن/گازوئیل/هوا)</option>
+                <option value="سرویس دوره‌ای کامل">🔧 آچارکشی و سرویس دوره‌ای کامل</option>
+              </optgroup>
+              <optgroup id="optgroupRepair" label="🔧 تعمیرگاه تخصصی و قطعات فنی">
+                <option value="سرویس کامل چرخ‌ها (بلبرینگ، کاسه‌نمد و رینگ)">🛞 سرویس کامل چرخ‌ها (بلبرینگ، کاسه‌نمد و رینگ)</option>
+                <option value="سرویس و تعویض لنت ترمز و چرخ‌ها">🛑 سرویس و تعویض لنت ترمز و چرخ‌ها</option>
+                <option value="تعمیرگاه تخصصی موتور و سرسیلندر">🔧 تعمیرگاه تخصصی موتور و سرسیلندر</option>
+                <option value="تعمیرگاه گیربکس، دیسک و صفحه کلاچ">⚙️ تعمیرگاه گیربکس، دیسک و صفحه کلاچ</option>
+                <option value="پمپ و انژکتور، سوپرشارژر و توربو">💨 پمپ، سوزن انژکتور و سوپرشارژر</option>
+                <option value="باطری‌سازی، دینام، استارت و برق">⚡ باطری‌سازی، دینام، استارت و برق</option>
+                <option value="آهنگری، زیربندی، مندل و فنرها">🔩 آهنگری، زیربندی، مندل و فنرها</option>
+                <option value="لاستیک، رینگ، بالانس و پنچری">🛞 لاستیک، رینگ، بالانس و پنچری</option>
+                <option value="تعمیرگاه عمومی و متفرقه تریلی">🛠️ تعمیرگاه عمومی و متفرقه تریلی</option>
+              </optgroup>
+            </select>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">تاریخ انجام *</label>
+              <div class="input-with-icon-wrapper" onclick="openDatePicker('serviceDate')">
+                <input type="text" id="serviceDate" class="form-input date-input-picker" placeholder="۱۴۰۵/۰۲/۱۵" readonly required>
+                <span class="input-picker-icon">📅</span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">کیلومتر فعلی خودرو *</label>
+              <input type="text" inputmode="numeric" id="serviceCurrentKm" class="form-input" placeholder="مثلاً ۶۸۵,۰۰۰" oninput="handleKmInput(this); autoSuggestNextKm();" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <label class="form-label" id="lblNextKm">کیلومتر تعویض یا بازدید بعدی *</label>
+              <span id="btnAutoKmSuggest" style="font-size:11px; color:#0284c7; cursor:pointer; font-weight:700;" onclick="autoSuggestNextKm()">+ ۳۵,۰۰۰ کیلومتر پیشنهاد دیزل</span>
+            </div>
+            <input type="text" inputmode="numeric" id="serviceNextKm" class="form-input" placeholder="مثلاً ۷۲۰,۰۰۰" oninput="handleKmInput(this)" required>
+            <div class="form-hint" id="hintKmInterval">فاصله استاندارد این سرویس محاسبه و پیشنهاد شد.</div>
+          </div>
+
+          <!-- Dynamic Specification Input (Oil Brand, Brake Brand, Engine Parts, etc.) -->
+          <div class="form-group" id="groupDynamicSpec">
+            <label class="form-label" id="lblDynamicSpec">برند و مشخصات روغن مصرفی *</label>
+            <input type="text" id="serviceOilBrand" class="form-input" placeholder="مثلاً بهران توربو دیزل 15W-40 یا اسپیدی">
+            <div class="form-hint" id="hintDynamicSpec">مارک و درجه روغن یا مشخصات فنی قطعه را وارد کنید.</div>
+          </div>
+
+          <!-- Dynamic Checkboxes Grid -->
+          <div class="form-group" id="groupDynamicCheckboxes">
+            <label class="form-label" id="lblDynamicCheckboxes">فیلترهای تعویض شده:</label>
+            <div class="checkbox-grid" id="containerDynamicCheckboxes">
+              <!-- Rendered dynamically by JS -->
+            </div>
+          </div>
+
+          <!-- Shop / Mechanic Name -->
+          <div class="form-group">
+            <label class="form-label" id="lblServiceShop">نام تعویض روغنی یا تعمیرگاه</label>
+            <input type="text" id="serviceShopName" class="form-input" placeholder="مثلاً تعویض روغنی پایانه یا مکانیکی استاد رضا">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">هزینه کل قطعات، سرویس و دستمزد (تومان)</label>
+            <input type="text" inputmode="numeric" id="serviceCost" class="form-input currency-input" placeholder="مثلاً ۱۴,۵۰۰,۰۰۰" oninput="handleCurrencyInput(this)">
+            <span id="hintServiceCost" class="currency-word-hint"></span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">هزینه را چه کسی پرداخت کرده؟</label>
+            <div style="display: flex; gap: 10px;">
+              <label for="radioServiceOwner" style="flex:1; border: 1px solid #cbd5e1; border-radius: 12px; padding: 10px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="radio" name="servicePaidBy" id="radioServiceOwner" value="owner" checked aria-label="پرداخت توسط مالک تریلی">
+                <span style="font-size: 12px; font-weight: 700; color: #475569;">👑 مالک تریلی</span>
+              </label>
+              <label for="radioServiceDriver" style="flex:1; border: 1px solid #cbd5e1; border-radius: 12px; padding: 10px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="radio" name="servicePaidBy" id="radioServiceDriver" value="driver" aria-label="پرداخت از جیب راننده">
+                <span style="font-size: 12px; font-weight: 700; color: #2563eb;">🧢 راننده از جیبش (طلبکار شود)</span>
+              </label>
+            </div>
+            <div class="form-hint" style="color: #2563eb;">
+              💡 در صورتی که راننده پرداخت کرده باشد، مبلغ خودکار به عنوان طلب راننده در حساب‌ها منظور می‌شود.
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" id="lblServiceReceipt">عکس فاکتور تعویض روغنی یا قطعات</label>
+            <input type="file" id="serviceReceiptFile" class="form-input" accept="image/*">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">توضیحات تکمیلی، داغی قطعه یا شماره گارانتی</label>
+            <input type="text" id="serviceDesc" class="form-input" placeholder="مثلاً داغی قطعه تحویل شد، دارای ۶ ماه ضمانت...">
+          </div>
+
+          <button type="submit" id="btnSubmitService" class="btn-primary" style="background: #0284c7;">
+            <span id="btnSubmitServiceIcon">💾</span>
+            <span id="btnSubmitServiceText">ذخیره در دفترچه سرویس تریلی</span>
+          </button>
+        </form>
+      </div>
+    </div>
+
     <!-- MODAL: ADD / EDIT TRIP -->
     <div class="modal-overlay" id="modalTrip">
       <div class="modal-sheet">
         <div class="modal-header">
           <div class="modal-title" id="modalTripTitle">📦 ثبت بار و بارنامه جدید</div>
-          <button class="modal-close-btn" onclick="closeModal('modalTrip')">✕</button>
+          <button type="button" class="modal-close-btn" onclick="closeModal('modalTrip')">✕</button>
         </div>
         
         <form id="formTrip" onsubmit="handleTripSubmit(event)">
@@ -345,7 +642,10 @@
             </div>
             <div class="form-group">
               <label class="form-label">تاریخ بارگیری</label>
-              <input type="text" id="tripLoadingDate" class="form-input" placeholder="۱۴۰۵/۰۲/۱۵">
+              <div class="input-with-icon-wrapper" onclick="openDatePicker('tripLoadingDate')">
+                <input type="text" id="tripLoadingDate" class="form-input date-input-picker" placeholder="۱۴۰۵/۰۲/۱۵" readonly>
+                <span class="input-picker-icon">📅</span>
+              </div>
             </div>
           </div>
 
@@ -385,7 +685,7 @@
               <strong id="liveDriverShare">۰ تومان</strong>
             </div>
             <div class="live-calc-row">
-              <span>سهم پدر (مالک):</span>
+              <span>سهم مالک تریلی:</span>
               <strong id="liveOwnerShare">۰ تومان</strong>
             </div>
           </div>
@@ -412,7 +712,7 @@
       <div class="modal-sheet">
         <div class="modal-header">
           <div class="modal-title">⛽ ثبت خرجی و هزینه راه</div>
-          <button class="modal-close-btn" onclick="closeModal('modalExpense')">✕</button>
+          <button type="button" class="modal-close-btn" onclick="closeModal('modalExpense')">✕</button>
         </div>
         
         <form id="formExpense" onsubmit="handleExpenseSubmit(event)">
@@ -453,7 +753,7 @@
               </label>
               <label id="labelPaidByOwner" style="flex:1; border: 1px solid #cbd5e1; border-radius: 12px; padding: 10px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
                 <input type="radio" name="expPaidBy" id="radioPaidByOwner" value="owner">
-                <span style="font-size: 13px; font-weight: 700; color: #475569;">👑 پدر پرداخت کرده</span>
+                <span style="font-size: 13px; font-weight: 700; color: #475569;">👑 مالک پرداخت کرده</span>
               </label>
             </div>
           </div>
@@ -461,11 +761,14 @@
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">تاریخ هزینه</label>
-              <input type="text" id="expDate" class="form-input" placeholder="۱۴۰۵/۰۲/۱۵">
+              <div class="input-with-icon-wrapper" onclick="openDatePicker('expDate')">
+                <input type="text" id="expDate" class="form-input date-input-picker" placeholder="۱۴۰۵/۰۲/۱۵" readonly>
+                <span class="input-picker-icon">📅</span>
+              </div>
             </div>
             <div class="form-group">
               <label class="form-label">عکس فاکتور / رسید</label>
-              <input type="file" id="expReceiptFile" class="form-input" accept="image/*" capture="environment">
+              <input type="file" id="expReceiptFile" class="form-input" accept="image/*">
             </div>
           </div>
 
@@ -484,13 +787,13 @@
       <div class="modal-sheet">
         <div class="modal-header">
           <div class="modal-title" id="modalPaymentTitle">💳 ثبت واریزی و مساعده</div>
-          <button class="modal-close-btn" onclick="closeModal('modalPayment')">✕</button>
+          <button type="button" class="modal-close-btn" onclick="closeModal('modalPayment')">✕</button>
         </div>
         
         <form id="formPayment" onsubmit="handlePaymentSubmit(event)">
           <!-- Notice for Driver -->
           <div id="driverPayNotice" style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 10px; font-size: 12px; color: #1e40af; margin-bottom: 12px; display: none;">
-            💡 هرگونه کرایه یا پیش‌کرایه‌ای که از جاده به حساب کارت پدر واریز کرده‌اید را اینجا ثبت کنید تا بلافاصله به طلب شما اضافه گردد.
+            💡 هرگونه کرایه یا پیش‌کرایه‌ای که از جاده به حساب کارت مالک واریز کرده‌اید را اینجا ثبت کنید تا بلافاصله به طلب شما اضافه گردد.
           </div>
 
           <!-- Transaction Type for Owner -->
@@ -520,7 +823,10 @@
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">تاریخ واریز</label>
-              <input type="text" id="payDate" class="form-input" placeholder="۱۴۰۵/۰۲/۱۵">
+              <div class="input-with-icon-wrapper" onclick="openDatePicker('payDate')">
+                <input type="text" id="payDate" class="form-input date-input-picker" placeholder="۱۴۰۵/۰۲/۱۵" readonly>
+                <span class="input-picker-icon">📅</span>
+              </div>
             </div>
             <div class="form-group">
               <label class="form-label">روش پرداخت</label>
@@ -540,7 +846,7 @@
 
           <div class="form-group">
             <label class="form-label">عکس فیش واریز / رسید بانکی</label>
-            <input type="file" id="payReceiptFile" class="form-input" accept="image/*" capture="environment">
+            <input type="file" id="payReceiptFile" class="form-input" accept="image/*">
           </div>
 
           <div class="form-group">
@@ -557,8 +863,57 @@
     <div class="modal-overlay" id="modalSettlement">
       <div class="modal-sheet">
         <div class="modal-header">
-          <div class="modal-title">📑 صورت‌حساب رسمی تسویه با راننده</div>
-          <button class="modal-close-btn" onclick="closeModal('modalSettlement')">✕</button>
+          <div class="modal-title" id="modalSettlementHeaderTitle">📑 صورت‌حساب رسمی تسویه با راننده</div>
+          <button type="button" class="modal-close-btn" onclick="closeModal('modalSettlement')">✕</button>
+        </div>
+
+        <!-- Modal Tabs: Current Invoice vs History of Past Settlements -->
+        <div class="settlement-modal-tabs" style="display: flex; gap: 6px; margin-bottom: 12px; background: #f1f5f9; padding: 4px; border-radius: 12px;">
+          <button type="button" id="tabModalCurrentSettlement" class="mode-tab-btn active-service" onclick="switchModalSettlementTab('current')" style="flex: 1; padding: 7px 4px; font-size: 11.5px; font-weight: 700; border: none; border-radius: 8px; cursor: pointer;">
+            📑 صورت‌حساب دوره جاری
+          </button>
+          <button type="button" id="tabModalHistorySettlement" class="mode-tab-btn" onclick="switchModalSettlementTab('history')" style="flex: 1; padding: 7px 4px; font-size: 11.5px; font-weight: 700; border: none; border-radius: 8px; cursor: pointer;">
+            📜 تاریخچه تسویه‌ها (<span id="modalHistoryCountBadge">۰</span>)
+          </button>
+        </div>
+
+        <!-- Container for Current Invoice -->
+        <div id="modalSettlementCurrentContainer">
+
+        <!-- Pending Transfers Warning for Settlement (BUG-03 fix) -->
+        <div id="invPendingWarning" style="display: none; background: #fffbeb; border: 1px solid #fef08a; border-radius: 12px; padding: 12px; margin-bottom: 12px; font-size: 13px; color: #b45309; line-height: 1.6;">
+          ⚠️ <strong>توجه مالک:</strong> <span id="invPendingWarningText">واریزی‌های تایید نشده راننده وجود دارد.</span>
+        </div>
+
+        <!-- Interactive Manual Adjustment Box for Owner (پاداش یا کسورات) -->
+        <div id="settlementAdjustmentBox" style="background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 14px; padding: 12px 14px; margin-bottom: 14px;">
+          <div style="font-weight: 800; font-size: 13px; color: #1e293b; margin-bottom: 8px; display:flex; align-items:center; gap:6px;">
+            <span>⚖️</span>
+            <span>تعدیلات نهایی دوره (پاداش / کسورات و جریمه دستی):</span>
+          </div>
+          <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+            <label style="flex:1; border:1px solid #cbd5e1; border-radius:10px; padding:6px 8px; font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
+              <input type="radio" name="adjTypeRadio" id="adjTypeNone" value="none" checked onchange="handleAdjTypeChange()">
+              <span>بدون تعدیل</span>
+            </label>
+            <label style="flex:1; border:1px solid #cbd5e1; border-radius:10px; padding:6px 8px; font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer; color:#16a34a;">
+              <input type="radio" name="adjTypeRadio" id="adjTypeBonus" value="bonus" onchange="handleAdjTypeChange()">
+              <span>+ پاداش به راننده</span>
+            </label>
+            <label style="flex:1; border:1px solid #cbd5e1; border-radius:10px; padding:6px 8px; font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer; color:#dc2626;">
+              <input type="radio" name="adjTypeRadio" id="adjTypePenalty" value="penalty" onchange="handleAdjTypeChange()">
+              <span>- کسورات / خسارت</span>
+            </label>
+          </div>
+          <div id="adjInputsRow" style="display: none; gap: 8px;">
+            <div style="flex: 1;">
+              <input type="text" inputmode="numeric" id="settlementAdjAmount" class="form-input currency-input" placeholder="مبلغ تعدیل (تومان)" oninput="handleCurrencyInput(this); calcSettlementLive();" style="font-size:12px; padding:8px 10px;">
+              <span id="hintAdjAmount" class="currency-word-hint" style="font-size:10.5px;"></span>
+            </div>
+            <div style="flex: 1.4;">
+              <input type="text" id="settlementAdjDesc" class="form-input" placeholder="علت پاداش یا کسورات (مثلاً حسن انجام کار)" oninput="calcSettlementLive()" style="font-size:12px; padding:8px 10px;">
+            </div>
+          </div>
         </div>
 
         <div id="invoicePrintArea" class="invoice-card">
@@ -584,6 +939,10 @@
             <span>واریزی‌های راننده به کارت مالک:</span>
             <strong id="invDriverTransfers">۰ تومان</strong>
           </div>
+          <div class="invoice-item-row" id="invRowBonus" style="display:none; color:#16a34a; background:#f0fdf4;">
+            <span>➕ پاداش و تشویقی راننده:</span>
+            <strong id="invBonusAmount">۰ تومان</strong>
+          </div>
           <div class="invoice-item-row" style="background:#f0fdf4; font-weight:700;">
             <span>جمع کل طلب راننده:</span>
             <strong id="invTotalCredit">۰ تومان</strong>
@@ -598,13 +957,20 @@
             <strong id="invCashCollected">۰ تومان</strong>
           </div>
           <div class="invoice-item-row">
-            <span>مجموع مساعده‌ها و واریزی‌های پدر:</span>
+            <span>مجموع مساعده‌ها و پرداختی‌های مالک:</span>
             <strong id="invAdvancesPaid">۰ تومان</strong>
+          </div>
+          <div class="invoice-item-row" id="invRowPenalty" style="display:none; color:#dc2626; background:#fef2f2;">
+            <span>➖ کسورات / جریمه / خسارت:</span>
+            <strong id="invPenaltyAmount">۰ تومان</strong>
           </div>
           <div class="invoice-item-row" style="background:#fef2f2; font-weight:700;">
             <span>جمع کل دریافتی‌های راننده:</span>
             <strong id="invTotalDebit">۰ تومان</strong>
           </div>
+
+          <!-- Adjustment reason badge -->
+          <div id="invAdjustmentNote" style="display:none; font-size:11.5px; color:#475569; background:#f1f5f9; padding:6px 10px; border-radius:8px; margin:8px 0; border: 1px solid #e2e8f0;"></div>
 
           <!-- Final Calculation -->
           <div class="invoice-total-row">
@@ -614,22 +980,101 @@
           <div style="font-size: 11px; text-align: center; margin-top: 10px; color: #64748b;" id="invConclusionText">
             حساب کاملاً تراز و شفاف است.
           </div>
+
+          <!-- Operational Overview & Owner Net Profit -->
+          <div id="invOverviewSection" style="margin-top:14px; border-top:1.5px dashed #cbd5e1; padding-top:10px;">
+            <div class="invoice-item-row" style="color:#475569;">
+              <span>صافی کل بارنامه‌های این دوره:</span>
+              <strong id="invTotalNetFreight">۰ تومان</strong>
+            </div>
+            <div class="invoice-item-row" style="color:#475569;">
+              <span>مجموع کل مخارج تریلی (ماشین):</span>
+              <strong id="invTotalMachineExpenses">۰ تومان</strong>
+            </div>
+
+            <div id="invOwnerProfitBox" style="background:#f0fdf4; border:1.5px solid #86efac; border-radius:12px; padding:12px; margin-top:10px;">
+              <div style="font-weight:800; font-size:13px; color:#166534; display:flex; justify-content:space-between; align-items:center;">
+                <span>👑 سود خالص مالک تریلی:</span>
+                <span id="invOwnerNetProfit" style="font-size:15px; font-weight:900; color:#15803d;">۰ تومان</span>
+              </div>
+              <div style="font-size:11px; color:#15803d; margin-top:4px;" id="invOwnerProfitDesc">
+                کرایه صافی منهای سهم راننده منهای کلیه مخارج و استهلاک
+              </div>
+            </div>
+          </div>
+
+          <!-- Granular Itemized Breakdown Section -->
+          <div class="invoice-itemized-section" style="margin-top: 14px; border-top: 1.5px dashed #cbd5e1; padding-top: 10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-weight: 800; font-size: 13px; color: #1e293b;">📋 ریز اقلام و سند خط‌به‌خط (<span id="invItemizedCountBadge">۰ قلم</span>)</span>
+              <button type="button" id="btnToggleItemized" class="badge-tag badge-unsettled" style="border:none; cursor:pointer; font-size:11.5px; padding:4px 10px;" onclick="toggleItemizedDetails()">
+                مشاهده جزئیات ▼
+              </button>
+            </div>
+
+            <div id="itemizedContainer" style="display: none; flex-direction: column; gap: 10px; margin-top: 10px;">
+              <!-- Trips breakdown -->
+              <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:10px;">
+                <div style="font-weight:700; font-size:12px; color:#0f172a; margin-bottom:6px; display:flex; justify-content:space-between;">
+                  <span>🚛 بارهای این دوره:</span>
+                  <span id="invItemizedTripsTotal" style="color:#0284c7; font-weight:800;">۰ تومان</span>
+                </div>
+                <div id="invItemizedTripsList" style="display:flex; flex-direction:column; gap:6px;"></div>
+              </div>
+
+              <!-- Expenses breakdown -->
+              <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:10px;">
+                <div style="font-weight:700; font-size:12px; color:#0f172a; margin-bottom:6px; display:flex; justify-content:space-between;">
+                  <span>⛽ مخارج ثبت شده در راه و ماشین:</span>
+                  <span id="invItemizedExpensesTotal" style="color:#e11d48; font-weight:800;">۰ تومان</span>
+                </div>
+                <div id="invItemizedExpensesList" style="display:flex; flex-direction:column; gap:6px;"></div>
+              </div>
+
+              <!-- Advances & transfers breakdown -->
+              <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:10px;">
+                <div style="font-weight:700; font-size:12px; color:#0f172a; margin-bottom:6px; display:flex; justify-content:space-between;">
+                  <span>💳 واریزی‌ها و مساعده‌ها:</span>
+                  <span id="invItemizedPaymentsTotal" style="color:#7c3aed; font-weight:800;">۰ تومان</span>
+                </div>
+                <div id="invItemizedPaymentsList" style="display:flex; flex-direction:column; gap:6px;"></div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <button id="btnCopyInvoice" class="copy-invoice-btn" onclick="copyInvoiceText()">
+        <button type="button" id="btnCopyInvoice" class="copy-invoice-btn" onclick="copyInvoiceText()">
           <span id="copyBtnIcon">📋</span>
           <span id="copyBtnText">کپی متن صورت‌حساب (جهت ارسال در ایتا، روبیکا، پیامک و...)</span>
         </button>
 
-        <button class="whatsapp-share-btn" onclick="shareInvoiceWhatsApp()">
+        <button type="button" class="whatsapp-share-btn" onclick="shareInvoiceWhatsApp()">
           <span>📲</span>
           <span>ارسال مستقیم در واتساپ</span>
         </button>
 
-        <button id="btnConfirmSettlement" class="btn-primary" style="margin-top: 10px; background: #0f172a;" onclick="confirmAndExecuteSettlement()">
+        <button type="button" id="btnConfirmSettlement" class="btn-primary" style="margin-top: 10px; background: #0f172a;" onclick="confirmAndExecuteSettlement()">
           <span>✓</span>
           <span>ثبت قطعی تسویه و صفر کردن دوره</span>
         </button>
+
+        <button type="button" id="btnBackToCurrentSettlement" class="btn-secondary" style="display: none; margin-top: 8px; width: 100%; padding: 10px; border-radius: 12px; font-weight: 700; font-size: 12.5px; border: 1px solid #cbd5e1; background: #f8fafc;" onclick="openSettlementPreviewModal()">
+          <span>← بازگشت به محاسبه تسویه دوره جاری</span>
+        </button>
+
+        <button type="button" id="btnRollbackSettlement" class="btn-primary" style="display: none; margin-top: 8px; background: #dc2626;" onclick="handleActiveSettlementRollback()">
+          <span>↩️</span>
+          <span>لغو و بازگردانی این تسویه حساب</span>
+        </button>
+        </div>
+
+        <!-- Container for Modal History List -->
+        <div id="modalSettlementHistoryContainer" style="display: none; flex-direction: column; gap: 10px; max-height: 68vh; overflow-y: auto;">
+          <div style="padding: 4px 0 8px 0;">
+            <input type="text" id="modalSearchSettlementsInput" class="form-input" placeholder="🔍 جستجو در تاریخچه تسویه‌ها..." oninput="handleModalSettlementSearch(this.value)" style="font-size: 12px; padding: 8px 10px; border-radius: 8px;">
+          </div>
+          <div id="modalSettlementHistoryList" class="card-list"></div>
+        </div>
       </div>
     </div>
 
@@ -638,12 +1083,12 @@
       <div class="modal-sheet">
         <div class="modal-header">
           <div class="modal-title">⚙️ تنظیمات تریلی و قرارداد</div>
-          <button class="modal-close-btn" onclick="closeModal('modalSettings')">✕</button>
+          <button type="button" class="modal-close-btn" onclick="closeModal('modalSettings')">✕</button>
         </div>
         
         <form id="formSettings" onsubmit="handleSettingsSubmit(event)">
           <div class="form-group">
-            <label class="form-label">نام مالک (پدر)</label>
+            <label class="form-label">نام مالک تریلی</label>
             <input type="text" id="settingOwner" class="form-input" required>
           </div>
           <div class="form-group">
@@ -651,8 +1096,67 @@
             <input type="text" id="settingDriver" class="form-input" required>
           </div>
           <div class="form-group">
-            <label class="form-label">پلاک تریلی</label>
-            <input type="text" id="settingPlate" class="form-input" placeholder="۱۲ ع ۳۴۵ ایران ۲۱" required>
+            <label class="form-label">پلاک تریلی (پلاک زرد ناوگان عمومی) *</label>
+            <div class="iran-plate-wrapper">
+              <div class="iran-plate-truck">
+                <!-- Blue Strip on Left -->
+                <div class="plate-blue-strip">
+                  <div class="plate-flag-strip">🇮🇷</div>
+                  <div class="plate-ir-text">I.R.<br>IRAN</div>
+                </div>
+
+                <!-- 2 Digits -->
+                <div class="plate-part-box">
+                  <input type="tel" inputmode="numeric" maxlength="2" id="platePart1" class="plate-digit-input" placeholder="۱۲" oninput="handlePlateInput(this, 'plateLetter')">
+                </div>
+
+                <!-- Letter Selector -->
+                <div class="plate-letter-box">
+                  <select id="plateLetter" class="plate-letter-dropdown" onchange="syncPlateToHiddenInput()">
+                    <option value="ع" selected>ع</option>
+                    <option value="الف">الف</option>
+                    <option value="ب">ب</option>
+                    <option value="پ">پ</option>
+                    <option value="ت">ت</option>
+                    <option value="ث">ث</option>
+                    <option value="ج">ج</option>
+                    <option value="د">د</option>
+                    <option value="ر">ر</option>
+                    <option value="ز">ز</option>
+                    <option value="س">س</option>
+                    <option value="ش">ش</option>
+                    <option value="ص">ص</option>
+                    <option value="ط">ط</option>
+                    <option value="ق">ق</option>
+                    <option value="ک">ک</option>
+                    <option value="گ">گ</option>
+                    <option value="ل">ل</option>
+                    <option value="م">م</option>
+                    <option value="ن">ن</option>
+                    <option value="و">و</option>
+                    <option value="هـ">هـ</option>
+                    <option value="ی">ی</option>
+                  </select>
+                </div>
+
+                <!-- 3 Digits -->
+                <div class="plate-part-box" style="flex: 1.3;">
+                  <input type="tel" inputmode="numeric" maxlength="3" id="platePart2" class="plate-digit-input" placeholder="۳۴۵" oninput="handlePlateInput(this, 'platePart3')">
+                </div>
+
+                <!-- Divider -->
+                <div class="plate-divider"></div>
+
+                <!-- Iran & 2-Digit City Code -->
+                <div class="plate-iran-box">
+                  <span class="plate-iran-title">ایران</span>
+                  <input type="tel" inputmode="numeric" maxlength="2" id="platePart3" class="plate-digit-input plate-city-input" placeholder="۲۱" oninput="handlePlateInput(this, null)">
+                </div>
+              </div>
+            </div>
+            <!-- Hidden input that holds the full combined string for form submission & backward compatibility -->
+            <input type="hidden" id="settingPlate" required>
+            <div class="form-hint" style="text-align:center; margin-top:4px;">شماره‌ها را وارد و حرف پلاک را انتخاب فرمایید.</div>
           </div>
           <div class="form-group">
             <label class="form-label">مدل و نوع تریلی</label>
@@ -671,7 +1175,7 @@
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">رمز عبور ورود به پنل مدیریت پدر (پین‌کد)</label>
+            <label class="form-label">رمز عبور ورود به پنل مدیریت مالک (پین‌کد)</label>
             <input type="password" id="settingOwnerPin" class="form-input" placeholder="رمز ۴ رقمی جدید" maxlength="10">
             <div class="form-hint">این رمز را در اختیار راننده قرار ندهید تا پنل شما کاملاً مجزا و امن بماند.</div>
           </div>
@@ -680,11 +1184,20 @@
           <div style="margin-top: 16px; border-top: 1px solid #f1f5f9; padding-top: 14px; display: flex; flex-direction: column; gap: 8px;">
             <button type="button" class="btn-sm-action" style="color: #0f172a; border-color: #cbd5e1; width: 100%; justify-content: center;" onclick="openModal('modalIosGuide')">
               <span>🍏</span>
-              <span>راهنمای نصب روی صفحه اصلی آیفون (iOS)</span>
+              <span>راهنمای نصب آفلاین روی صفحه آیفون (PWA)</span>
             </button>
+            <button type="button" class="btn-sm-action" style="color: #0284c7; border-color: #bae6fd; width: 100%; justify-content: center;" onclick="exportLocalBackup()">
+              <span>📥</span>
+              <span>پشتیبان‌گیری کامل روی آیفون (دانلود فایل JSON)</span>
+            </button>
+            <button type="button" class="btn-sm-action" style="color: #d97706; border-color: #fde68a; width: 100%; justify-content: center;" onclick="triggerRestoreBackup()">
+              <span>📤</span>
+              <span>بازیابی اطلاعات از فایل پشتیبان JSON</span>
+            </button>
+            <input type="file" id="inputLocalRestore" accept=".json" onchange="importLocalBackupFile(event)" style="display:none;">
             <button type="button" class="btn-sm-action" style="color: #059669; border-color: #a7f3d0; width: 100%; justify-content: center;" onclick="downloadDatabaseBackup()">
               <span>💾</span>
-              <span>دانلود و پشتیبان‌گیری از دیتابیس حساب‌ها</span>
+              <span>دانلود فایل خام دیتابیس سرور (SQLite .db)</span>
             </button>
             <button type="button" class="btn-sm-action" style="color: #2563eb; border-color: #bfdbfe; width: 100%; justify-content: center;" onclick="openAuditModal()">
               <span>📜</span>
@@ -700,7 +1213,7 @@
       <div class="modal-sheet">
         <div class="modal-header">
           <div class="modal-title">🍏 راهنمای نصب روی صفحه اصلی آیفون</div>
-          <button class="modal-close-btn" onclick="closeModal('modalIosGuide')">✕</button>
+          <button type="button" class="modal-close-btn" onclick="closeModal('modalIosGuide')">✕</button>
         </div>
         <div style="padding: 10px 0; text-align: center;">
           <div style="font-size: 38px; margin-bottom: 6px;">📲</div>
@@ -740,7 +1253,7 @@
       <div class="modal-sheet">
         <div class="modal-header">
           <div class="modal-title">📜 تاریخچه و لاگ تغییرات سیستم</div>
-          <button class="modal-close-btn" onclick="closeModal('modalAuditLogs')">✕</button>
+          <button type="button" class="modal-close-btn" onclick="closeModal('modalAuditLogs')">✕</button>
         </div>
         <div id="auditLogContent" class="audit-list">
           <div class="empty-state">در حال بارگذاری لاگ‌ها...</div>
@@ -752,12 +1265,12 @@
     <div class="modal-overlay" id="modalPinLogin">
       <div class="modal-sheet" style="text-align: center;">
         <div class="modal-header">
-          <div class="modal-title">🔒 ورود به پنل مدیریت پدر (مالک)</div>
-          <button class="modal-close-btn" onclick="closeModal('modalPinLogin')">✕</button>
+          <div class="modal-title">🔒 ورود به پنل مدیریت مالک تریلی</div>
+          <button type="button" class="modal-close-btn" onclick="closeModal('modalPinLogin')">✕</button>
         </div>
         <div style="font-size: 38px; margin: 10px 0;">👑</div>
         <p style="font-size: 13px; color: #64748b; margin-bottom: 16px;">
-          جهت مشاهده سود کل تریلی، صدور فاکتور و دسترسی به پنل مدیریت، رمز عبور پدر را وارد کنید:
+          جهت مشاهده سود کل تریلی، صدور فاکتور و دسترسی به پنل مدیریت، رمز عبور مالک را وارد کنید:
         </p>
         <form onsubmit="handlePinLogin(event)">
           <div class="form-group">
@@ -777,9 +1290,145 @@
       <div class="modal-sheet" style="text-align: center;">
         <div class="modal-header">
           <div class="modal-title">📷 تصویر رسید / فاکتور</div>
-          <button class="modal-close-btn" onclick="closeModal('modalImage')">✕</button>
+          <button type="button" class="modal-close-btn" onclick="closeModal('modalImage')" aria-label="بستن">✕</button>
         </div>
-        <img id="viewerImg" src="" style="max-width: 100%; border-radius: 12px; max-height: 65vh; object-fit: contain;">
+        <img id="viewerImg" src="" alt="تصویر رسید یا فاکتور بارنامه" style="max-width: 100%; border-radius: 12px; max-height: 65vh; object-fit: contain;">
+      </div>
+    </div>
+
+    <!-- MODAL: SHAMSI DATE PICKER (تقویم شمسی لمسی مخصوص آیفون) -->
+    <div class="modal-overlay" id="modalDatePicker">
+      <div class="modal-sheet" style="max-width: 420px;">
+        <div class="modal-header">
+          <div class="modal-title">📅 انتخاب تاریخ شمسی</div>
+          <button type="button" class="modal-close-btn" onclick="closeModal('modalDatePicker')">✕</button>
+        </div>
+
+        <!-- Quick selection chips -->
+        <div class="date-quick-chips">
+          <button type="button" class="date-quick-chip" onclick="setQuickDate(0)">امروز</button>
+          <button type="button" class="date-quick-chip" onclick="setQuickDate(-1)">دیروز</button>
+          <button type="button" class="date-quick-chip" onclick="setQuickDate(1)">فردا</button>
+          <button type="button" class="date-quick-chip" onclick="setQuickDate(-7)">۱ هفته قبل</button>
+        </div>
+
+        <!-- 3 Wheel / Dropdown Selectors: Year, Month, Day -->
+        <div class="date-wheel-selectors">
+          <div class="date-wheel-box">
+            <span class="date-wheel-label">سال</span>
+            <select id="pickerYearSelect" class="date-wheel-select" onchange="onPickerDropdownChange()">
+              <option value="1402">۱۴۰۲</option>
+              <option value="1403">۱۴۰۳</option>
+              <option value="1404">۱۴۰۴</option>
+              <option value="1405" selected>۱۴۰۵</option>
+              <option value="1406">۱۴۰۶</option>
+              <option value="1407">۱۴۰۷</option>
+            </select>
+          </div>
+          <div class="date-wheel-box" style="flex: 1.4;">
+            <span class="date-wheel-label">ماه</span>
+            <select id="pickerMonthSelect" class="date-wheel-select" onchange="onPickerDropdownChange()">
+              <option value="1">فروردین</option>
+              <option value="2">اردیبهشت</option>
+              <option value="3">خرداد</option>
+              <option value="4">تیر</option>
+              <option value="5">مرداد</option>
+              <option value="6">شهریور</option>
+              <option value="7">مهر</option>
+              <option value="8">آبان</option>
+              <option value="9">آذر</option>
+              <option value="10">دی</option>
+              <option value="11">بهمن</option>
+              <option value="12">اسفند</option>
+            </select>
+          </div>
+          <div class="date-wheel-box">
+            <span class="date-wheel-label">روز</span>
+            <select id="pickerDaySelect" class="date-wheel-select" onchange="onPickerDayDropdownChange()">
+              <!-- Generated 1-31 dynamically -->
+            </select>
+          </div>
+        </div>
+
+        <!-- Interactive Calendar Day Grid -->
+        <div class="date-calendar-grid" id="pickerCalendarGrid"></div>
+
+        <!-- Live Selection Preview Banner -->
+        <div class="date-selected-preview-banner" id="pickerSelectedBanner">
+          تاریخ انتخابی: ۱۴۰۵/۰۲/۱۵
+        </div>
+
+        <button type="button" class="btn-primary" onclick="confirmDatePickerSelection()">
+          ✓ تایید و درج تاریخ
+        </button>
+      </div>
+    </div>
+
+    <!-- MODAL: PAYMENTS REPORT & PRINTABLE PDF -->
+    <div class="modal-overlay" id="modalPaymentsReport">
+      <div class="modal-sheet" style="max-width: 600px;">
+        <div class="modal-header no-print">
+          <div class="modal-title">📄 گزارش واریزی‌ها و فاکتور چاپی (PDF)</div>
+          <button type="button" class="modal-close-btn" onclick="closeModal('modalPaymentsReport')">✕</button>
+        </div>
+
+        <!-- Action bar inside modal (no-print) -->
+        <div class="no-print" style="display:flex; gap:8px; margin-bottom:14px;">
+          <button type="button" class="btn-primary" style="flex:1; background:#0284c7;" onclick="triggerPrintPaymentsReport()">
+            <span>🖨️ چاپ مستقیم / ذخیره PDF</span>
+          </button>
+          <button type="button" class="btn-export-excel" style="flex:1;" onclick="exportPaymentsExcel()">
+            <span>📊 دانلود فایل اکسل</span>
+          </button>
+        </div>
+
+        <div id="printAreaContainer" class="print-report-sheet">
+          <div style="text-align:center; border-bottom:2px solid #0f172a; padding-bottom:10px; margin-bottom:12px;">
+            <h2 style="font-size:16px; font-weight:900; margin:0 0 4px 0;">گزارش جامع تراکنش‌ها، واریزی‌ها و مساعده‌ها</h2>
+            <div style="font-size:12px; color:#475569;" id="rptTruckInfo">تریلی: -- | مالک: -- | راننده: --</div>
+            <div style="font-size:11px; color:#64748b; margin-top:2px;" id="rptGeneratedDate">تاریخ گزارش: --</div>
+          </div>
+
+          <!-- Summary KPI boxes -->
+          <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <div style="flex:1; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:8px; text-align:center;">
+              <div style="font-size:10px; color:#166534; font-weight:700;">واریز راننده به کارت من</div>
+              <div style="font-size:13px; font-weight:900; color:#15803d; margin-top:2px;" id="rptTotalDriverTransfers">۰ تومان</div>
+            </div>
+            <div style="flex:1; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:8px; text-align:center;">
+              <div style="font-size:10px; color:#991b1b; font-weight:700;">مساعده‌های پرداختی من</div>
+              <div style="font-size:13px; font-weight:900; color:#b91c1c; margin-top:2px;" id="rptTotalAdvances">۰ تومان</div>
+            </div>
+            <div style="flex:1; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px; text-align:center;">
+              <div style="font-size:10px; color:#475569; font-weight:700;">تعداد تراکنش‌ها</div>
+              <div style="font-size:13px; font-weight:900; color:#0f172a; margin-top:2px;" id="rptTotalCount">۰ فقره</div>
+            </div>
+          </div>
+
+          <!-- Table of payments -->
+          <div style="overflow-x:auto;">
+            <table class="report-print-table">
+              <thead>
+                <tr>
+                  <th style="width:30px;">#</th>
+                  <th>تاریخ</th>
+                  <th>نوع تراکنش</th>
+                  <th>مبلغ (تومان)</th>
+                  <th>روش</th>
+                  <th>کد پیگیری</th>
+                  <th>وضعیت</th>
+                </tr>
+              </thead>
+              <tbody id="rptTableBody"></tbody>
+            </table>
+          </div>
+
+          <!-- Signatures footer -->
+          <div style="display:flex; justify-content:space-around; margin-top:24px; padding-top:12px; border-top:1px dashed #cbd5e1; font-size:11px; font-weight:700; color:#334155;">
+            <div>امضا و اثرانگشت راننده محترم</div>
+            <div>امضا و تایید مالک تریلی</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -789,6 +1438,6 @@
   </div>
 
   <!-- JavaScript -->
-  <script src="/js/app.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>

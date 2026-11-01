@@ -7,7 +7,7 @@ class Setting(db.Model):
     __tablename__ = 'settings'
     
     id = db.Column(db.Integer, primary_key=True)
-    owner_name = db.Column(db.String(100), default='پدر (مالک تریلی)')
+    owner_name = db.Column(db.String(100), default='مالک تریلی')
     driver_name = db.Column(db.String(100), default='راننده محترم')
     plate_number = db.Column(db.String(50), default='۱۲ ع ۳۴۵ ایران ۲۱')
     truck_model = db.Column(db.String(100), default='تریلی کمپرسی / کفی')
@@ -49,7 +49,7 @@ class Trip(db.Model):
     
     driver_share_percent = db.Column(db.Float, default=20.0, nullable=False)
     driver_share_amount = db.Column(db.BigInteger, default=0, nullable=False) # سهم راننده (تومان)
-    owner_share_amount = db.Column(db.BigInteger, default=0, nullable=False) # سهم پدر (تومان)
+    owner_share_amount = db.Column(db.BigInteger, default=0, nullable=False) # سهم مالک (تومان)
     
     cash_received_by_driver = db.Column(db.BigInteger, default=0, nullable=False) # پیش‌کرایه/پس‌کرایه نقدی دست راننده
     
@@ -104,8 +104,8 @@ class Expense(db.Model):
     trip_id = db.Column(db.Integer, db.ForeignKey('trips.id'), nullable=True, index=True)
     category = db.Column(db.String(50), nullable=False) # گازوئیل، عوارض، باسکول، انعام، پنچری، روغن، تعمیرات، متفرقه
     amount = db.Column(db.BigInteger, nullable=False, default=0) # تومان
-    paid_by = db.Column(db.String(20), default='driver', index=True) # 'driver' (از جیب راننده) یا 'owner' (از جیب پدر)
-    liability = db.Column(db.String(30), default='owner_machine') # 'owner_machine' (تماماً پای پدر) یا 'shared_trip'
+    paid_by = db.Column(db.String(20), default='driver', index=True) # 'driver' (از جیب راننده) یا 'owner' (از جیب مالک)
+    liability = db.Column(db.String(30), default='owner_machine') # 'owner_machine' (تماماً پای مالک) یا 'shared_trip'
     expense_date = db.Column(db.String(20), nullable=True) # تاریخ شمسی
     description = db.Column(db.String(255), nullable=True)
     receipt_image = db.Column(db.String(255), nullable=True)
@@ -136,7 +136,7 @@ class AdvancePayment(db.Model):
     __tablename__ = 'advance_payments'
     
     id = db.Column(db.Integer, primary_key=True)
-    payer = db.Column(db.String(20), default='owner', index=True) # 'owner' (مساعده پدر به راننده) یا 'driver' (واریزی راننده به حساب پدر)
+    payer = db.Column(db.String(20), default='owner', index=True) # 'owner' (مساعده مالک به راننده) یا 'driver' (واریزی راننده به حساب مالک)
     amount = db.Column(db.BigInteger, nullable=False, default=0) # تومان
     payment_date = db.Column(db.String(20), nullable=True) # تاریخ شمسی
     payment_method = db.Column(db.String(50), default='کارت به کارت')
@@ -179,18 +179,25 @@ class Settlement(db.Model):
     # طلب راننده
     driver_earned_share = db.Column(db.BigInteger, default=0) # حق‌الزحمه ۲۰٪
     driver_paid_expenses = db.Column(db.BigInteger, default=0) # خرج‌هایی که راننده از جیبش داده
-    driver_transfers_to_owner = db.Column(db.BigInteger, default=0) # واریزی‌های راننده به حساب پدر
-    total_driver_credit = db.Column(db.BigInteger, default=0) # کل طلب = سهم + خرج راننده + واریزی به پدر
+    driver_transfers_to_owner = db.Column(db.BigInteger, default=0) # واریزی‌های راننده به حساب مالک
+    total_driver_credit = db.Column(db.BigInteger, default=0) # کل طلب = سهم + خرج راننده + واریزی به مالک
     
     # بدهی راننده
     driver_cash_collected = db.Column(db.BigInteger, default=0) # پیش‌کرایه نقدی دست راننده
-    advances_paid_by_owner = db.Column(db.BigInteger, default=0) # واریزی‌های پدر به راننده
+    advances_paid_by_owner = db.Column(db.BigInteger, default=0) # واریزی‌های مالک به راننده
     total_driver_debit = db.Column(db.BigInteger, default=0) # کل بدهی = نقدینگی + مساعده‌ها
     
     # مانده نهایی
-    # مثبت = پدر باید به راننده پرداخت کند
-    # منفی = راننده باید به پدر پس دهد
+    # مثبت = مالک باید به راننده پرداخت کند
+    # منفی = راننده باید به مالک پس دهد
     final_balance = db.Column(db.BigInteger, default=0)
+    
+    # تعدیلات دستی، پاداش، کسورات و سود خالص مالک
+    adjustment_amount = db.Column(db.BigInteger, default=0) # تومان (مثبت برای پاداش به راننده، منفی برای کسورات/خسارت)
+    adjustment_desc = db.Column(db.String(255), nullable=True) # شرح پاداش یا کسورات
+    owner_net_profit = db.Column(db.BigInteger, default=0) # سود خالص مالک تریلی از این دوره کارکرد
+    itemized_json = db.Column(db.Text, nullable=True) # ریز سند قطعی دوره به فرمت JSON جهت بایگانی ابدی
+
     status = db.Column(db.String(30), default='تسویه شده') # 'تسویه شده' یا 'پیش‌نویس'
     notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -200,6 +207,25 @@ class Settlement(db.Model):
     payments = db.relationship('AdvancePayment', backref='settlement', lazy=True)
 
     def to_dict(self):
+        import json
+        itemized_data = None
+        if self.itemized_json:
+            try:
+                itemized_data = json.loads(self.itemized_json)
+            except Exception:
+                itemized_data = None
+
+        if not itemized_data:
+            # Fallback for historical settlements without JSON snapshot
+            itemized_data = {
+                'trips': [t.to_dict() for t in self.trips] if self.trips else [],
+                'expenses': [e.to_dict() for e in self.expenses] if self.expenses else [],
+                'payments': [p.to_dict() for p in self.payments] if self.payments else [],
+                'adjustment_amount': self.adjustment_amount or 0,
+                'adjustment_desc': self.adjustment_desc or '',
+                'owner_net_profit': self.owner_net_profit or 0
+            }
+
         return {
             'id': self.id,
             'title': self.title,
@@ -213,9 +239,13 @@ class Settlement(db.Model):
             'driver_cash_collected': self.driver_cash_collected,
             'advances_paid_by_owner': self.advances_paid_by_owner,
             'total_driver_debit': self.total_driver_debit,
+            'adjustment_amount': self.adjustment_amount or 0,
+            'adjustment_desc': self.adjustment_desc or '',
+            'owner_net_profit': self.owner_net_profit or 0,
             'final_balance': self.final_balance,
             'status': self.status,
             'notes': self.notes,
+            'itemized': itemized_data,
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else None
         }
 
@@ -240,4 +270,43 @@ class AuditLog(db.Model):
             'actor_role': self.actor_role,
             'details': self.details,
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None
+        }
+
+
+class ServiceLog(db.Model):
+    __tablename__ = 'service_logs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    service_type = db.Column(db.String(100), nullable=False, default='تعویض روغن موتور', index=True)
+    service_category = db.Column(db.String(50), default='service', index=True) # 'service' (سرویس دوره‌ای) یا 'repair' (تعمیرگاه و قطعات)
+    service_date = db.Column(db.String(20), nullable=True) # تاریخ شمسی
+    current_km = db.Column(db.BigInteger, nullable=False, default=0) # کیلومتر فعلی
+    next_km = db.Column(db.BigInteger, nullable=False, default=0) # کیلومتر تعویض بعدی
+    oil_brand = db.Column(db.String(150), nullable=True) # برند و مشخصات روغن یا قطعه
+    filters_replaced = db.Column(db.String(255), nullable=True) # فیلترها یا قطعات تعویض شده
+    cost = db.Column(db.BigInteger, default=0) # هزینه سرویس یا تعمیرگاه
+    paid_by = db.Column(db.String(20), default='owner') # owner یا driver
+    shop_name = db.Column(db.String(150), nullable=True) # نام تعمیرگاه / مکانیکی / تعویض روغنی
+    description = db.Column(db.String(255), nullable=True)
+    receipt_image = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        remaining_km = max(0, (self.next_km or 0) - (self.current_km or 0))
+        return {
+            'id': self.id,
+            'service_type': self.service_type,
+            'service_category': getattr(self, 'service_category', 'service') or 'service',
+            'service_date': self.service_date,
+            'current_km': self.current_km,
+            'next_km': self.next_km,
+            'remaining_km': remaining_km,
+            'oil_brand': self.oil_brand,
+            'filters_replaced': self.filters_replaced,
+            'cost': self.cost,
+            'paid_by': self.paid_by,
+            'shop_name': getattr(self, 'shop_name', None),
+            'description': self.description,
+            'receipt_image': self.receipt_image,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else None
         }
