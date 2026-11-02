@@ -26,6 +26,17 @@ let appState = {
 // موتور ذخیره‌سازی محلی کاملاً آفلاین روی حافظه آیفون (LocalDB Engine)
 // این بخش تضمین می‌کند برنامه بدون نیاز به لپ‌تاپ یا اینترنت ۱۰۰٪ کار کند
 // =================================================================
+
+// Helper to detect static hosts (GitHub Pages, etc.) or offline mode
+function isStaticHost() {
+  return window.location.protocol === 'file:' || 
+         window.location.hostname.includes('github.io') ||
+         window.location.hostname.includes('pages.dev') ||
+         window.location.hostname.includes('netlify.app') ||
+         window.location.hostname.includes('vercel.app') ||
+         !navigator.onLine;
+}
+
 const LocalDB = {
   KEYS: {
     SETTINGS: 'trili_local_settings',
@@ -37,8 +48,60 @@ const LocalDB = {
     AUDIT: 'trili_local_audit'
   },
 
+  defaultSettings: {
+    owner_name: 'مالک تریلی',
+    driver_name: 'راننده محترم',
+    plate_number: '۱۲ ع ۳۴۵ ایران ۲۱',
+    truck_model: 'تریلی ولوو FH500',
+    driver_share_percent: 20.0,
+    driver_share_basis: 'net',
+    owner_pin: '1234'
+  },
+
+  repairCorruptedState() {
+    const arrayKeys = [
+      this.KEYS.TRIPS,
+      this.KEYS.EXPENSES,
+      this.KEYS.PAYMENTS,
+      this.KEYS.SERVICES,
+      this.KEYS.SETTLEMENTS,
+      this.KEYS.AUDIT
+    ];
+    arrayKeys.forEach(k => {
+      try {
+        const raw = localStorage.getItem(k);
+        if (!raw) {
+          localStorage.setItem(k, JSON.stringify([]));
+          return;
+        }
+        const val = JSON.parse(raw);
+        if (!Array.isArray(val)) {
+          console.warn(`LocalDB: Repaired corrupted non-array key ${k}`, val);
+          localStorage.setItem(k, JSON.stringify([]));
+        }
+      } catch (e) {
+        localStorage.setItem(k, JSON.stringify([]));
+      }
+    });
+
+    try {
+      const sRaw = localStorage.getItem(this.KEYS.SETTINGS);
+      if (sRaw) {
+        const s = JSON.parse(sRaw);
+        if (!s || typeof s !== 'object' || Array.isArray(s) || s.offline) {
+          localStorage.setItem(this.KEYS.SETTINGS, JSON.stringify(this.defaultSettings));
+        }
+      } else {
+        localStorage.setItem(this.KEYS.SETTINGS, JSON.stringify(this.defaultSettings));
+      }
+    } catch (e) {
+      localStorage.setItem(this.KEYS.SETTINGS, JSON.stringify(this.defaultSettings));
+    }
+  },
+
   init() {
-    // One-time purge of initial mock/demo records across client devices
+    this.repairCorruptedState();
+
     if (!localStorage.getItem('trili_demo_data_purged_v1')) {
       localStorage.setItem(this.KEYS.TRIPS, JSON.stringify([]));
       localStorage.setItem(this.KEYS.EXPENSES, JSON.stringify([]));
@@ -48,58 +111,45 @@ const LocalDB = {
       localStorage.setItem(this.KEYS.AUDIT, JSON.stringify([]));
       localStorage.setItem('trili_demo_data_purged_v1', 'true');
     }
-
-    if (!localStorage.getItem(this.KEYS.SETTINGS)) {
-      const defaultSettings = {
-        owner_name: 'مالک تریلی',
-        driver_name: 'راننده محترم',
-        plate_number: '۱۲ ع ۳۴۵ ایران ۲۱',
-        truck_model: 'تریلی ولوو FH500',
-        driver_share_percent: 20.0,
-        driver_share_basis: 'net',
-        owner_pin: '1234'
-      };
-      localStorage.setItem(this.KEYS.SETTINGS, JSON.stringify(defaultSettings));
-    }
-
-    if (!localStorage.getItem(this.KEYS.SERVICES)) {
-      localStorage.setItem(this.KEYS.SERVICES, JSON.stringify([]));
-    }
-    if (!localStorage.getItem(this.KEYS.TRIPS)) {
-      localStorage.setItem(this.KEYS.TRIPS, JSON.stringify([]));
-    }
-    if (!localStorage.getItem(this.KEYS.EXPENSES)) {
-      localStorage.setItem(this.KEYS.EXPENSES, JSON.stringify([]));
-    }
-    if (!localStorage.getItem(this.KEYS.PAYMENTS)) {
-      localStorage.setItem(this.KEYS.PAYMENTS, JSON.stringify([]));
-    }
-    if (!localStorage.getItem(this.KEYS.SETTLEMENTS)) {
-      localStorage.setItem(this.KEYS.SETTLEMENTS, JSON.stringify([]));
-    }
-    if (!localStorage.getItem(this.KEYS.AUDIT)) {
-      localStorage.setItem(this.KEYS.AUDIT, JSON.stringify([]));
-    }
   },
 
   get(key) {
     try {
       const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : (key === this.KEYS.SETTINGS ? {} : []);
+      if (!raw) {
+        return key === this.KEYS.SETTINGS ? { ...this.defaultSettings } : [];
+      }
+      const parsed = JSON.parse(raw);
+      if (key === this.KEYS.SETTINGS) {
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && !parsed.offline) {
+          return parsed;
+        }
+        return { ...this.defaultSettings };
+      }
+      return Array.isArray(parsed) ? parsed : [];
     } catch (e) {
-      return key === this.KEYS.SETTINGS ? {} : [];
+      return key === this.KEYS.SETTINGS ? { ...this.defaultSettings } : [];
     }
   },
 
   set(key, val) {
     try {
+      if (key !== this.KEYS.SETTINGS) {
+        if (!Array.isArray(val)) {
+          console.warn(`LocalDB.set rejected non-array for key ${key}:`, val);
+          return;
+        }
+      } else {
+        if (!val || typeof val !== 'object' || Array.isArray(val) || val.offline) {
+          return;
+        }
+      }
       localStorage.setItem(key, JSON.stringify(val));
     } catch (e) {
-      console.warn('LocalStorage save notice:', e);
+      console.warn('LocalStorage save error:', e);
     }
   },
 
-  // محاسبه دقیق حسابداری محلی منطبق بر فرمول‌های مالی
   calculateSummary(role) {
     const trips = this.get(this.KEYS.TRIPS);
     const expenses = this.get(this.KEYS.EXPENSES);
@@ -448,39 +498,31 @@ async function handleOwnerLoginDirect(e) {
   const errEl = document.getElementById('loginPinError');
   errEl.style.display = 'none';
 
+  const localCfg = LocalDB.get(LocalDB.KEYS.SETTINGS) || {};
+  const correctPin = localCfg.owner_pin || (appState.settings && appState.settings.owner_pin) || '1234';
+
   let verified = false;
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
-    const res = await fetch('/api/auth/verify-owner-pin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin }),
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-    if (!res.ok || res.status === 404 || res.status === 502) {
-      throw new Error('API offline');
+  if (pin === correctPin) {
+    verified = true;
+    if (!isStaticHost()) {
+      fetch('/api/auth/verify-owner-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin })
+      }).catch(() => {});
     }
-    const data = await res.json();
-    if (data.status === 'success') {
-      verified = true;
-    } else {
-      errEl.textContent = data.message || 'رمز عبور نادرست است!';
-      errEl.style.display = 'block';
-      return;
-    }
-  } catch (err) {
-    // Offline PIN verification from local storage
-    const localCfg = LocalDB.get(LocalDB.KEYS.SETTINGS) || {};
-    const correctPin = localCfg.owner_pin || (appState.settings && appState.settings.owner_pin) || '1234';
-    if (pin === correctPin) {
-      verified = true;
-    } else {
-      errEl.textContent = 'رمز عبور نادرست است!';
-      errEl.style.display = 'block';
-      return;
-    }
+  } else if (!isStaticHost()) {
+    try {
+      const res = await fetch('/api/auth/verify-owner-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'success') verified = true;
+      }
+    } catch (err) {}
   }
 
   if (verified) {
@@ -491,6 +533,9 @@ async function handleOwnerLoginDirect(e) {
     switchNav('dashboard');
     loadAllData();
     showToast('خوش آمدید! وارد پنل مدیریت مالک شدید.');
+  } else {
+    errEl.textContent = 'رمز عبور نادرست است!';
+    errEl.style.display = 'block';
   }
 }
 
@@ -505,22 +550,46 @@ function logoutToLoginScreen() {
 
 async function loadAllData() {
   if (!appState.role) return;
+
+  // 1. Synchronously load and render from LocalDB for instant offline UI
+  appState.settings = LocalDB.get(LocalDB.KEYS.SETTINGS) || {};
+  appState.trips = LocalDB.get(LocalDB.KEYS.TRIPS) || [];
+  appState.expenses = LocalDB.get(LocalDB.KEYS.EXPENSES) || [];
+  appState.payments = LocalDB.get(LocalDB.KEYS.PAYMENTS) || [];
+  appState.settlements = LocalDB.get(LocalDB.KEYS.SETTLEMENTS) || [];
+  appState.services = LocalDB.get(LocalDB.KEYS.SERVICES) || [];
+  appState.summary = LocalDB.calculateSummary(appState.role);
+
   renderRoleHeaderAndAccess();
-  await Promise.all([
-    fetchSettings(),
-    fetchSummary(),
-    fetchTrips(),
-    fetchExpenses(),
-    fetchServices(),
-    fetchPayments(),
-    fetchSettlements()
-  ]);
+  updateHeaderWithSettings();
+  updateSummaryUI();
   renderDashboard();
   renderTripsList();
   renderExpensesList();
   renderServicesList();
   renderPaymentsList();
   renderSettlementsList();
+
+  // 2. Background sync only if connected to actual server (not GitHub Pages)
+  if (!isStaticHost()) {
+    try {
+      await Promise.allSettled([
+        fetchSettings(),
+        fetchSummary(),
+        fetchTrips(),
+        fetchExpenses(),
+        fetchServices(),
+        fetchPayments(),
+        fetchSettlements()
+      ]);
+      renderDashboard();
+      renderTripsList();
+      renderExpensesList();
+      renderServicesList();
+      renderPaymentsList();
+      renderSettlementsList();
+    } catch (e) {}
+  }
 }
 
 // --- Role Management & Header Access Bar ---
@@ -638,38 +707,31 @@ async function handlePinLogin(e) {
   const errEl = document.getElementById('pinErrorMessage');
   errEl.style.display = 'none';
 
+  const localCfg = LocalDB.get(LocalDB.KEYS.SETTINGS) || {};
+  const correctPin = localCfg.owner_pin || (appState.settings && appState.settings.owner_pin) || '1234';
+
   let verified = false;
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
-    const res = await fetch('/api/auth/verify-owner-pin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin }),
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-    if (!res.ok || res.status === 404 || res.status === 502) {
-      throw new Error('API offline');
+  if (pin === correctPin) {
+    verified = true;
+    if (!isStaticHost()) {
+      fetch('/api/auth/verify-owner-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin })
+      }).catch(() => {});
     }
-    const data = await res.json();
-    if (data.status === 'success') {
-      verified = true;
-    } else {
-      errEl.textContent = data.message || 'رمز عبور نادرست است!';
-      errEl.style.display = 'block';
-      return;
-    }
-  } catch (err) {
-    const localCfg = LocalDB.get(LocalDB.KEYS.SETTINGS) || {};
-    const correctPin = localCfg.owner_pin || (appState.settings && appState.settings.owner_pin) || '1234';
-    if (pin === correctPin) {
-      verified = true;
-    } else {
-      errEl.textContent = 'رمز عبور نادرست است!';
-      errEl.style.display = 'block';
-      return;
-    }
+  } else if (!isStaticHost()) {
+    try {
+      const res = await fetch('/api/auth/verify-owner-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'success') verified = true;
+      }
+    } catch (err) {}
   }
 
   if (verified) {
@@ -678,6 +740,9 @@ async function handlePinLogin(e) {
     closeModal('modalPinLogin');
     await loadAllData();
     showToast('خوش آمدید! وارد پنل مدیریت مالک شدید.');
+  } else {
+    errEl.textContent = 'رمز عبور نادرست است!';
+    errEl.style.display = 'block';
   }
 }
 
@@ -685,127 +750,134 @@ async function handlePinLogin(e) {
 async function fetchSettings() {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const timeoutId = setTimeout(() => controller.abort(), 800);
     const res = await fetch('/api/settings', { signal: controller.signal });
     clearTimeout(timeoutId);
     if (res.ok) {
       const serverSettings = await res.json();
-      const localCfg = LocalDB.get(LocalDB.KEYS.SETTINGS) || {};
-      // BUG-14 FIX: Preserve local owner_pin if server settings exclude PIN (required for offline auth)
-      if (!serverSettings.owner_pin && localCfg.owner_pin) {
-        serverSettings.owner_pin = localCfg.owner_pin;
+      if (serverSettings && typeof serverSettings === 'object' && !serverSettings.offline && (serverSettings.plate_number || serverSettings.owner_name)) {
+        const localCfg = LocalDB.get(LocalDB.KEYS.SETTINGS) || {};
+        if (!serverSettings.owner_pin && localCfg.owner_pin) {
+          serverSettings.owner_pin = localCfg.owner_pin;
+        }
+        appState.settings = serverSettings;
+        LocalDB.set(LocalDB.KEYS.SETTINGS, appState.settings);
+        updateHeaderWithSettings();
+        return;
       }
-      appState.settings = serverSettings;
-      LocalDB.set(LocalDB.KEYS.SETTINGS, appState.settings);
-    } else {
-      appState.settings = LocalDB.get(LocalDB.KEYS.SETTINGS) || {};
     }
-  } catch (err) {
-    appState.settings = LocalDB.get(LocalDB.KEYS.SETTINGS) || {};
-  }
+  } catch (err) {}
+  appState.settings = LocalDB.get(LocalDB.KEYS.SETTINGS) || {};
   updateHeaderWithSettings();
 }
 
 async function fetchSummary() {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const timeoutId = setTimeout(() => controller.abort(), 800);
     const res = await fetch(`/api/summary?role=${appState.role}`, { signal: controller.signal });
     clearTimeout(timeoutId);
     if (res.ok) {
-      appState.summary = await res.json();
-    } else {
-      appState.summary = LocalDB.calculateSummary(appState.role);
+      const s = await res.json();
+      if (s && typeof s === 'object' && !s.offline && s.net_profit !== undefined) {
+        appState.summary = s;
+        updateSummaryUI();
+        return;
+      }
     }
-  } catch (err) {
-    appState.summary = LocalDB.calculateSummary(appState.role);
-  }
+  } catch (err) {}
+  appState.summary = LocalDB.calculateSummary(appState.role);
   updateSummaryUI();
 }
 
 async function fetchTrips() {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const timeoutId = setTimeout(() => controller.abort(), 800);
     const res = await fetch('/api/trips', { signal: controller.signal });
     clearTimeout(timeoutId);
     if (res.ok) {
-      appState.trips = await res.json();
-      LocalDB.set(LocalDB.KEYS.TRIPS, appState.trips);
-    } else {
-      appState.trips = LocalDB.get(LocalDB.KEYS.TRIPS);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        appState.trips = data;
+        LocalDB.set(LocalDB.KEYS.TRIPS, data);
+        return;
+      }
     }
-  } catch (err) {
-    appState.trips = LocalDB.get(LocalDB.KEYS.TRIPS);
-  }
+  } catch (err) {}
+  appState.trips = LocalDB.get(LocalDB.KEYS.TRIPS);
 }
 
 async function fetchExpenses() {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const timeoutId = setTimeout(() => controller.abort(), 800);
     const res = await fetch(`/api/expenses?role=${appState.role}`, { signal: controller.signal });
     clearTimeout(timeoutId);
     if (res.ok) {
-      appState.expenses = await res.json();
-      LocalDB.set(LocalDB.KEYS.EXPENSES, appState.expenses);
-    } else {
-      appState.expenses = LocalDB.get(LocalDB.KEYS.EXPENSES);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        appState.expenses = data;
+        LocalDB.set(LocalDB.KEYS.EXPENSES, data);
+        return;
+      }
     }
-  } catch (err) {
-    appState.expenses = LocalDB.get(LocalDB.KEYS.EXPENSES);
-  }
+  } catch (err) {}
+  appState.expenses = LocalDB.get(LocalDB.KEYS.EXPENSES);
 }
 
 async function fetchPayments() {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const timeoutId = setTimeout(() => controller.abort(), 800);
     const res = await fetch('/api/payments', { signal: controller.signal });
     clearTimeout(timeoutId);
     if (res.ok) {
-      appState.payments = await res.json();
-      LocalDB.set(LocalDB.KEYS.PAYMENTS, appState.payments);
-    } else {
-      appState.payments = LocalDB.get(LocalDB.KEYS.PAYMENTS);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        appState.payments = data;
+        LocalDB.set(LocalDB.KEYS.PAYMENTS, data);
+        return;
+      }
     }
-  } catch (err) {
-    appState.payments = LocalDB.get(LocalDB.KEYS.PAYMENTS);
-  }
+  } catch (err) {}
+  appState.payments = LocalDB.get(LocalDB.KEYS.PAYMENTS);
 }
 
 async function fetchSettlements() {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const timeoutId = setTimeout(() => controller.abort(), 800);
     const res = await fetch('/api/settlements', { signal: controller.signal });
     clearTimeout(timeoutId);
     if (res.ok) {
-      appState.settlements = await res.json();
-      LocalDB.set(LocalDB.KEYS.SETTLEMENTS, appState.settlements);
-    } else {
-      appState.settlements = LocalDB.get(LocalDB.KEYS.SETTLEMENTS);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        appState.settlements = data;
+        LocalDB.set(LocalDB.KEYS.SETTLEMENTS, data);
+        return;
+      }
     }
-  } catch (err) {
-    appState.settlements = LocalDB.get(LocalDB.KEYS.SETTLEMENTS);
-  }
+  } catch (err) {}
+  appState.settlements = LocalDB.get(LocalDB.KEYS.SETTLEMENTS);
 }
 
 async function fetchServices() {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const timeoutId = setTimeout(() => controller.abort(), 800);
     const res = await fetch('/api/services', { signal: controller.signal });
     clearTimeout(timeoutId);
     if (res.ok) {
-      appState.services = await res.json();
-      LocalDB.set(LocalDB.KEYS.SERVICES, appState.services);
-    } else {
-      appState.services = LocalDB.get(LocalDB.KEYS.SERVICES);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        appState.services = data;
+        LocalDB.set(LocalDB.KEYS.SERVICES, data);
+        return;
+      }
     }
-  } catch (err) {
-    appState.services = LocalDB.get(LocalDB.KEYS.SERVICES);
-  }
+  } catch (err) {}
+  appState.services = LocalDB.get(LocalDB.KEYS.SERVICES);
 }
 
 function updateHeaderWithSettings() {
@@ -1112,7 +1184,7 @@ function renderExpenseCardHTML(e) {
 
       <div class="card-footer-actions">
         ${e.receipt_image ? `
-          <button class="btn-sm-action" onclick="viewReceiptImage('${e.receipt_image}')">
+          <button class="btn-sm-action" onclick="viewReceiptById('expense', ${e.id})">
             <span>📷 مشاهده فاکتور</span>
           </button>
         ` : ''}
@@ -1182,7 +1254,7 @@ function renderPaymentCardHTML(p) {
 
       <div class="card-footer-actions">
         ${p.receipt_image ? `
-          <button class="btn-sm-action" onclick="viewReceiptImage('${p.receipt_image}')">
+          <button class="btn-sm-action" onclick="viewReceiptById('payment', ${p.id})">
             <span>📷 مشاهده رسید بانکی</span>
           </button>
         ` : ''}
@@ -1470,7 +1542,7 @@ function renderServiceCardHTML(s) {
 
       <div class="card-footer-actions">
         ${s.receipt_image ? `
-          <button class="btn-sm-action" onclick="viewReceiptImage('${s.receipt_image}')">
+          <button class="btn-sm-action" onclick="viewReceiptById('service', ${s.id})">
             📷 فاکتور ${isRepair ? 'تعمیرگاه' : 'روغن'}
           </button>` : ''}
         ${isOwner ? `
@@ -1765,28 +1837,7 @@ async function confirmRollbackSettlement(id) {
 
   showToast('در حال لغو تسویه حساب...');
 
-  // 1. Try server DELETE
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
-    const res = await fetch(`/api/settlements/${id}`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Role': 'owner'
-      },
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      console.warn('Backend rollback notice:', errData.message);
-    }
-  } catch (e) {
-    console.warn('Offline rollback mode');
-  }
-
-  // 2. Update LocalDB
+  // 1. Immediately update LocalDB
   const allTrips = LocalDB.get(LocalDB.KEYS.TRIPS);
   allTrips.forEach(t => {
     if (t.settlement_id === id) {
@@ -1820,6 +1871,17 @@ async function confirmRollbackSettlement(id) {
   closeModal('modalSettlement');
   await loadAllData();
   showToast('تسویه حساب لغو شد و بارها و خرج‌ها به دوره جاری بازگردانده شدند.');
+
+  // 2. Background sync
+  if (!isStaticHost()) {
+    fetch(`/api/settlements/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Role': 'owner'
+      }
+    }).catch(() => {});
+  }
 }
 
 function handleActiveSettlementRollback() {
@@ -2009,263 +2071,239 @@ function calcTripSharesLive() {
 async function handleTripSubmit(e) {
   e.preventDefault();
   const submitBtn = e.target.querySelector('button[type="submit"]');
-  submitBtn.disabled = true;
-  submitBtn.classList.add('btn-loading');
-  submitBtn.textContent = 'در حال ذخیره...';
-
-  const data = {
-    id: Date.now(),
-    origin: document.getElementById('tripOrigin').value.trim(),
-    destination: document.getElementById('tripDestination').value.trim(),
-    bill_number: normalizeDigits(document.getElementById('tripBillNumber').value),
-    loading_date: normalizeDigits(document.getElementById('tripLoadingDate').value),
-    cargo_type: document.getElementById('tripCargo').value.trim(),
-    weight_tons: parseFloat(document.getElementById('tripWeight').value) || 0,
-    total_freight: parseCleanInt(document.getElementById('tripTotalFreight').value),
-    commission_fee: parseCleanInt(document.getElementById('tripCommission').value),
-    cash_received_by_driver: parseCleanInt(document.getElementById('tripCashDriver').value),
-    notes: document.getElementById('tripNotes').value.trim()
-  };
-
-  const pct = (appState.settings && appState.settings.driver_share_percent) || 20.0;
-  const basis = (appState.settings && appState.settings.driver_share_basis) || 'net';
-  const netFreight = Math.max(0, data.total_freight - data.commission_fee);
-  const driverShareAmount = basis === 'gross'
-    ? Math.round((data.total_freight * pct) / 100)
-    : Math.round((netFreight * pct) / 100);
-
-  data.net_freight = netFreight;
-  data.driver_share_percent = pct;
-  data.driver_share_amount = driverShareAmount;
-  data.owner_share_amount = Math.max(0, netFreight - driverShareAmount);
-  data.is_settled = false;
-  data.created_at = getTodayShamsi();
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.classList.add('btn-loading');
+    submitBtn.textContent = 'در حال ذخیره...';
+  }
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2500);
-    const res = await fetch('/api/trips', {
+    const data = {
+      id: Date.now(),
+      origin: document.getElementById('tripOrigin').value.trim(),
+      destination: document.getElementById('tripDestination').value.trim(),
+      bill_number: normalizeDigits(document.getElementById('tripBillNumber').value),
+      loading_date: normalizeDigits(document.getElementById('tripLoadingDate').value),
+      cargo_type: document.getElementById('tripCargo').value.trim(),
+      weight_tons: parseFloat(document.getElementById('tripWeight').value) || 0,
+      total_freight: parseCleanInt(document.getElementById('tripTotalFreight').value),
+      commission_fee: parseCleanInt(document.getElementById('tripCommission').value),
+      cash_received_by_driver: parseCleanInt(document.getElementById('tripCashDriver').value),
+      notes: document.getElementById('tripNotes').value.trim()
+    };
+
+    const pct = (appState.settings && appState.settings.driver_share_percent) || 20.0;
+    const basis = (appState.settings && appState.settings.driver_share_basis) || 'net';
+    const netFreight = Math.max(0, data.total_freight - data.commission_fee);
+    const driverShareAmount = basis === 'gross'
+      ? Math.round((data.total_freight * pct) / 100)
+      : Math.round((netFreight * pct) / 100);
+
+    data.net_freight = netFreight;
+    data.driver_share_percent = pct;
+    data.driver_share_amount = driverShareAmount;
+    data.owner_share_amount = Math.max(0, netFreight - driverShareAmount);
+    data.is_settled = false;
+    data.created_at = getTodayShamsi();
+
+    // 1. Save to LocalDB immediately - Guaranteed offline persistence!
+    const trips = LocalDB.get(LocalDB.KEYS.TRIPS);
+    trips.unshift(data);
+    LocalDB.set(LocalDB.KEYS.TRIPS, trips);
+
+    closeModal('modalTrip');
+    await loadAllData();
+    showToast('بارنامه با موفقیت ثبت شد!');
+
+    // 2. Non-blocking background API sync
+    fetch('/api/trips', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Role': appState.role
       },
-      body: JSON.stringify(data),
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-    if (res.ok) {
-      const respData = await res.json();
-      if (respData.trip) Object.assign(data, respData.trip);
-    }
+      body: JSON.stringify(data)
+    }).then(r => r.json()).then(respData => {
+      if (respData && respData.trip && respData.trip.id) {
+        data.server_id = respData.trip.id;
+      }
+    }).catch(() => {});
   } catch (err) {
-    console.log('Saved trip locally (offline mode)');
+    console.error('Error in handleTripSubmit:', err);
+    alert('خطا در ذخیره بارنامه: ' + err.message);
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.classList.remove('btn-loading');
+      submitBtn.textContent = 'ذخیره بارنامه';
+    }
   }
-
-  const trips = LocalDB.get(LocalDB.KEYS.TRIPS);
-  trips.unshift(data);
-  LocalDB.set(LocalDB.KEYS.TRIPS, trips);
-
-  closeModal('modalTrip');
-  await loadAllData();
-  showToast('بارنامه با موفقیت روی حافظه گوشی ثبت شد!');
-  submitBtn.disabled = false;
-  submitBtn.classList.remove('btn-loading');
-  submitBtn.textContent = 'ذخیره بارنامه';
 }
 
 async function handleExpenseSubmit(e) {
   e.preventDefault();
   const submitBtn = e.target.querySelector('button[type="submit"]');
-  submitBtn.disabled = true;
-  submitBtn.classList.add('btn-loading');
-  submitBtn.textContent = 'در حال ذخیره...';
-  
-  let receiptImage = null;
-  const fileInput = document.getElementById('expReceiptFile');
-  if (fileInput && fileInput.files.length > 0) {
-    try {
-      const compressedBlob = await compressImageClientSide(fileInput.files[0]);
-      if (!navigator.onLine) {
-        receiptImage = await blobToBase64(compressedBlob);
-      } else {
-        const formData = new FormData();
-        formData.append('file', compressedBlob, 'receipt.jpg');
-        const upRes = await fetch('/api/upload', { method: 'POST', body: formData });
-        const upData = await upRes.json();
-        if (upData.status === 'success') {
-          receiptImage = upData.filename;
-        }
-      }
-    } catch (err) {
-      console.warn('Image compression failed:', err);
-    }
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.classList.add('btn-loading');
+    submitBtn.textContent = 'در حال ذخیره...';
   }
-
-  const paidBy = appState.role === 'driver' ? 'driver' : document.querySelector('input[name="expPaidBy"]:checked').value;
-  const data = {
-    id: Date.now(),
-    trip_id: document.getElementById('expTripId').value || null,
-    category: document.getElementById('expCategory').value,
-    amount: parseCleanInt(document.getElementById('expAmount').value),
-    paid_by: paidBy,
-    liability: 'owner_machine',
-    expense_date: normalizeDigits(document.getElementById('expDate').value) || getTodayShamsi(),
-    description: document.getElementById('expDesc').value.trim(),
-    receipt_image: receiptImage,
-    is_settled: false,
-    created_at: getTodayShamsi()
-  };
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2500);
-    const res = await fetch('/api/expenses', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Role': appState.role
-      },
-      body: JSON.stringify(data),
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-    if (res.ok) {
-      const respData = await res.json();
-      if (respData.expense) Object.assign(data, respData.expense);
+    let receiptImage = null;
+    const fileInput = document.getElementById('expReceiptFile');
+    if (fileInput && fileInput.files.length > 0) {
+      try {
+        const compressedBlob = await compressImageClientSide(fileInput.files[0]);
+        receiptImage = await blobToBase64(compressedBlob);
+      } catch (err) {
+        console.warn('Image processing notice:', err);
+      }
+    }
+
+    const paidBy = appState.role === 'driver' ? 'driver' : (document.querySelector('input[name="expPaidBy"]:checked')?.value || 'driver');
+    const data = {
+      id: Date.now(),
+      trip_id: document.getElementById('expTripId').value || null,
+      category: document.getElementById('expCategory').value,
+      amount: parseCleanInt(document.getElementById('expAmount').value),
+      paid_by: paidBy,
+      liability: 'owner_machine',
+      expense_date: normalizeDigits(document.getElementById('expDate').value) || getTodayShamsi(),
+      description: document.getElementById('expDesc').value.trim(),
+      receipt_image: receiptImage,
+      is_settled: false,
+      created_at: getTodayShamsi()
+    };
+
+    // 1. Immediately save to LocalDB - Guaranteed persistence!
+    const expenses = LocalDB.get(LocalDB.KEYS.EXPENSES);
+    expenses.unshift(data);
+    LocalDB.set(LocalDB.KEYS.EXPENSES, expenses);
+
+    closeModal('modalExpense');
+    await loadAllData();
+    showToast('هزینه با موفقیت در حافظه گوشی ذخیره شد!');
+
+    // 2. Non-blocking background sync only if backend available
+    if (!isStaticHost()) {
+      fetch('/api/expenses', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Role': appState.role
+        },
+        body: JSON.stringify(data)
+      }).catch(() => {});
     }
   } catch (err) {
-    console.log('Saved expense locally (offline mode)');
+    console.error('Error in handleExpenseSubmit:', err);
+    alert('خطا در ثبت هزینه: ' + err.message);
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.classList.remove('btn-loading');
+      submitBtn.textContent = 'ثبت هزینه';
+    }
   }
-
-  const expenses = LocalDB.get(LocalDB.KEYS.EXPENSES);
-  expenses.unshift(data);
-  LocalDB.set(LocalDB.KEYS.EXPENSES, expenses);
-
-  closeModal('modalExpense');
-  await loadAllData();
-  showToast('هزینه با موفقیت در حافظه ذخیره شد!');
-  submitBtn.disabled = false;
-  submitBtn.classList.remove('btn-loading');
-  submitBtn.textContent = 'ثبت هزینه';
 }
 
 async function handlePaymentSubmit(e, isDuplicateConfirmed = false) {
   e.preventDefault();
   const submitBtn = e.target.querySelector('button[type="submit"]');
-  submitBtn.disabled = true;
-  submitBtn.classList.add('btn-loading');
-  submitBtn.textContent = 'در حال ثبت...';
-
-  let receiptImage = null;
-  const fileInput = document.getElementById('payReceiptFile');
-  if (fileInput && fileInput.files.length > 0) {
-    try {
-      const compressedBlob = await compressImageClientSide(fileInput.files[0]);
-      if (!navigator.onLine) {
-        receiptImage = await blobToBase64(compressedBlob);
-      } else {
-        const formData = new FormData();
-        formData.append('file', compressedBlob, 'payment_receipt.jpg');
-        const upRes = await fetch('/api/upload', { method: 'POST', body: formData });
-        const upData = await upRes.json();
-        if (upData.status === 'success') {
-          receiptImage = upData.filename;
-        }
-      }
-    } catch (err) {
-      console.warn('Receipt upload notice:', err);
-    }
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.classList.add('btn-loading');
+    submitBtn.textContent = 'در حال ثبت...';
   }
-
-  let payer = 'driver';
-  let isApproved = false;
-  if (appState.role === 'owner') {
-    const radio = document.querySelector('input[name="payPayerRadio"]:checked');
-    payer = radio ? radio.value : 'owner';
-    isApproved = true;
-  }
-
-  const data = {
-    id: Date.now(),
-    payer: payer,
-    amount: parseCleanInt(document.getElementById('payAmount').value),
-    payment_date: normalizeDigits(document.getElementById('payDate').value) || getTodayShamsi(),
-    payment_method: document.getElementById('payMethod').value,
-    tracking_code: normalizeDigits(document.getElementById('payTracking').value),
-    description: document.getElementById('payDesc').value.trim(),
-    receipt_image: receiptImage,
-    is_approved: isApproved,
-    is_settled: false,
-    confirm_duplicate: isDuplicateConfirmed,
-    created_at: getTodayShamsi()
-  };
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2500);
-    const res = await fetch('/api/payments', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Role': appState.role
-      },
-      body: JSON.stringify(data),
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
+    let receiptImage = null;
+    const fileInput = document.getElementById('payReceiptFile');
+    if (fileInput && fileInput.files.length > 0) {
+      try {
+        const compressedBlob = await compressImageClientSide(fileInput.files[0]);
+        receiptImage = await blobToBase64(compressedBlob);
+      } catch (err) {
+        console.warn('Receipt upload notice:', err);
+      }
+    }
 
-    if (res.status === 409) {
-      const warnData = await res.json();
+    let payer = 'driver';
+    let isApproved = false;
+    if (appState.role === 'owner') {
+      const radio = document.querySelector('input[name="payPayerRadio"]:checked');
+      payer = radio ? radio.value : 'owner';
+      isApproved = true;
+    }
+
+    const trackingCode = normalizeDigits(document.getElementById('payTracking').value);
+
+    // Duplicate tracking code check
+    if (trackingCode && !isDuplicateConfirmed) {
+      const existing = LocalDB.get(LocalDB.KEYS.PAYMENTS).find(p => p.tracking_code === trackingCode);
+      if (existing) {
+        if (!confirm(`هشدار: کد پیگیری «${trackingCode}» قبلاً برای واریزی مبلغ ${formatToman(existing.amount)} تومان ثبت شده است.\nآیا مطمئن هستید که این یک تراکنش مجدد است؟`)) {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('btn-loading');
+            submitBtn.textContent = 'ثبت واریزی';
+          }
+          return;
+        }
+      }
+    }
+
+    const data = {
+      id: Date.now(),
+      payer: payer,
+      amount: parseCleanInt(document.getElementById('payAmount').value),
+      payment_date: normalizeDigits(document.getElementById('payDate').value) || getTodayShamsi(),
+      payment_method: document.getElementById('payMethod').value,
+      tracking_code: trackingCode,
+      description: document.getElementById('payDesc').value.trim(),
+      receipt_image: receiptImage,
+      is_approved: isApproved,
+      is_settled: false,
+      confirm_duplicate: isDuplicateConfirmed,
+      created_at: getTodayShamsi()
+    };
+
+    // 1. Immediately save to LocalDB
+    const payments = LocalDB.get(LocalDB.KEYS.PAYMENTS);
+    payments.unshift(data);
+    LocalDB.set(LocalDB.KEYS.PAYMENTS, payments);
+
+    closeModal('modalPayment');
+    await loadAllData();
+    showToast(isApproved ? 'واریزی با موفقیت در حافظه گوشی ثبت شد!' : 'واریزی ثبت شد و پس از تایید مالک در حساب اعمال خواهد شد.');
+
+    // 2. Non-blocking background API sync only if backend available
+    if (!isStaticHost()) {
+      fetch('/api/payments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Role': appState.role
+        },
+        body: JSON.stringify(data)
+      }).catch(() => {});
+    }
+  } catch (err) {
+    console.error('Error in handlePaymentSubmit:', err);
+    alert('خطا در ثبت واریزی: ' + err.message);
+  } finally {
+    if (submitBtn) {
       submitBtn.disabled = false;
       submitBtn.classList.remove('btn-loading');
       submitBtn.textContent = 'ثبت واریزی';
-      if (confirm(warnData.message)) {
-        return handlePaymentSubmit(e, true);
-      } else {
-        return;
-      }
     }
-
-    if (res.ok) {
-      const resData = await res.json();
-      if (resData.payment) Object.assign(data, resData.payment);
-    }
-  } catch (err) {
-    console.log('Saved payment locally (offline mode)');
   }
-
-  const payments = LocalDB.get(LocalDB.KEYS.PAYMENTS);
-  payments.unshift(data);
-  LocalDB.set(LocalDB.KEYS.PAYMENTS, payments);
-
-  closeModal('modalPayment');
-  await loadAllData();
-  if (appState.role === 'driver') {
-    showToast('واریزی ثبت شد و پس از تایید مالک در حساب اعمال می‌شود.');
-  } else {
-    showToast(payer === 'driver' ? 'واریزی راننده مستقیماً تایید و ثبت شد!' : 'مساعده با موفقیت ثبت شد!');
-  }
-  submitBtn.disabled = false;
-  submitBtn.classList.remove('btn-loading');
-  submitBtn.textContent = 'ثبت واریزی';
 }
 
 // --- Payment Verification Actions for Owner ---
 async function approvePayment(id) {
   if (appState.role !== 'owner') return;
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
-    await fetch(`/api/payments/${id}/approve`, {
-      method: 'POST',
-      headers: { 'X-Role': 'owner' },
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-  } catch (err) {
-    console.log('Approved locally');
-  }
 
   const payments = LocalDB.get(LocalDB.KEYS.PAYMENTS);
   const p = payments.find(item => String(item.id) === String(id));
@@ -2274,38 +2312,37 @@ async function approvePayment(id) {
 
   await loadAllData();
   showToast('واریزی راننده با موفقیت تایید شد و به عنوان طلب او در حساب اعمال گردید.');
+
+  if (!isStaticHost()) {
+    fetch(`/api/payments/${id}/approve`, {
+      method: 'POST',
+      headers: { 'X-Role': 'owner' }
+    }).catch(() => {});
+  }
 }
 
 async function rejectPayment(id) {
   if (appState.role !== 'owner') return;
   if (!confirm('آیا مطمئن هستید که این واریزی به حسابتان نیامده و می‌خواهید آن را رد و حذف کنید؟')) return;
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
-    await fetch(`/api/payments/${id}/reject`, {
-      method: 'POST',
-      headers: { 'X-Role': 'owner' },
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-  } catch (err) {
-    console.log('Rejected locally');
-  }
 
   const payments = LocalDB.get(LocalDB.KEYS.PAYMENTS).filter(item => String(item.id) !== String(id));
   LocalDB.set(LocalDB.KEYS.PAYMENTS, payments);
 
   await loadAllData();
   showToast('واریزی رد و از سیستم حذف گردید.');
+
+  if (!isStaticHost()) {
+    fetch(`/api/payments/${id}/reject`, {
+      method: 'POST',
+      headers: { 'X-Role': 'owner' }
+    }).catch(() => {});
+  }
 }
 
 async function handleSettingsSubmit(e) {
   e.preventDefault();
   const submitBtn = e.target.querySelector('button[type="submit"]');
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'در حال ذخیره...';
-
-  syncPlateToHiddenInput();
+  if (submitBtn) submitBtn.disabled = true;
 
   const data = {
     owner_name: document.getElementById('settingOwner').value.trim(),
@@ -2319,68 +2356,66 @@ async function handleSettingsSubmit(e) {
   if (pinVal) data.owner_pin = pinVal;
   else data.owner_pin = (appState.settings && appState.settings.owner_pin) || '1234';
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
-    await fetch('/api/settings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Role': appState.role
-      },
-      body: JSON.stringify(data),
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-  } catch (err) {
-    console.log('Saved settings locally');
-  }
-
+  // 1. Immediately save to LocalDB
   LocalDB.set(LocalDB.KEYS.SETTINGS, data);
   appState.settings = data;
 
   closeModal('modalSettings');
   await loadAllData();
-  showToast('تنظیمات با موفقیت ذخیره شد!');
-  submitBtn.disabled = false;
-  submitBtn.textContent = 'ذخیره تنظیمات';
+  showToast('تنظیمات با موفقیت در حافظه گوشی ذخیره شد!');
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'ذخیره تنظیمات';
+  }
+
+  // 2. Background sync
+  if (!isStaticHost()) {
+    fetch('/api/settings', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Role': appState.role
+      },
+      body: JSON.stringify(data)
+    }).catch(() => {});
+  }
 }
 
 // --- Deletions ---
 async function deleteTrip(id) {
   if (appState.role !== 'owner') return;
   if (!confirm('آیا از حذف این بارنامه مطمئن هستید؟')) return;
-  try {
-    await fetch(`/api/trips/${id}`, { method: 'DELETE', headers: { 'X-Role': 'owner' } });
-  } catch (e) {}
   const trips = LocalDB.get(LocalDB.KEYS.TRIPS).filter(t => String(t.id) !== String(id));
   LocalDB.set(LocalDB.KEYS.TRIPS, trips);
   await loadAllData();
   showToast('بارنامه حذف گردید.');
+  if (!isStaticHost()) {
+    fetch(`/api/trips/${id}`, { method: 'DELETE', headers: { 'X-Role': 'owner' } }).catch(() => {});
+  }
 }
 
 async function deleteExpense(id) {
   if (appState.role !== 'owner') return;
   if (!confirm('آیا از حذف این هزینه مطمئن هستید؟')) return;
-  try {
-    await fetch(`/api/expenses/${id}`, { method: 'DELETE', headers: { 'X-Role': 'owner' } });
-  } catch (e) {}
   const expenses = LocalDB.get(LocalDB.KEYS.EXPENSES).filter(e => String(e.id) !== String(id));
   LocalDB.set(LocalDB.KEYS.EXPENSES, expenses);
   await loadAllData();
   showToast('هزینه حذف گردید.');
+  if (!isStaticHost()) {
+    fetch(`/api/expenses/${id}`, { method: 'DELETE', headers: { 'X-Role': 'owner' } }).catch(() => {});
+  }
 }
 
 async function deletePayment(id) {
   if (appState.role !== 'owner') return;
   if (!confirm('آیا از حذف این واریزی مطمئن هستید؟')) return;
-  try {
-    await fetch(`/api/payments/${id}`, { method: 'DELETE', headers: { 'X-Role': 'owner' } });
-  } catch (e) {}
   const payments = LocalDB.get(LocalDB.KEYS.PAYMENTS).filter(p => String(p.id) !== String(id));
   LocalDB.set(LocalDB.KEYS.PAYMENTS, payments);
   await loadAllData();
   showToast('واریزی حذف گردید.');
+  if (!isStaticHost()) {
+    fetch(`/api/payments/${id}`, { method: 'DELETE', headers: { 'X-Role': 'owner' } }).catch(() => {});
+  }
 }
 
 // --- Service & Workshop Maintenance Management ---
@@ -2904,123 +2939,115 @@ function autoSuggestNextKm() {
 async function handleServiceSubmit(e) {
   e.preventDefault();
   const submitBtn = e.target.querySelector('button[type="submit"]');
-  submitBtn.disabled = true;
-  submitBtn.classList.add('btn-loading');
-  submitBtn.textContent = 'در حال ذخیره...';
-
-  const serviceType = document.getElementById('serviceType').value;
-  const cfg = SERVICE_TYPE_CONFIGS[serviceType] || {};
-  const serviceCategory = document.getElementById('serviceCategory')?.value || cfg.category || 'service';
-  const isRepair = serviceCategory === 'repair';
-
-  // Collect checked checkboxes
-  const checkedBoxes = Array.from(document.querySelectorAll('#containerDynamicCheckboxes input[type="checkbox"]:checked'))
-    .map(cb => cb.value);
-
-  let receiptImage = null;
-  const fileInput = document.getElementById('serviceReceiptFile');
-  if (fileInput && fileInput.files.length > 0) {
-    try {
-      const compressedBlob = await compressImageClientSide(fileInput.files[0]);
-      if (!navigator.onLine) {
-        receiptImage = await blobToBase64(compressedBlob);
-      } else {
-        const formData = new FormData();
-        formData.append('file', compressedBlob, 'service_receipt.jpg');
-        const upRes = await fetch('/api/upload', { method: 'POST', body: formData });
-        const upData = await upRes.json();
-        if (upData.status === 'success') {
-          receiptImage = upData.filename;
-        }
-      }
-    } catch (err) {
-      console.warn('Receipt processing notice:', err);
-    }
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.classList.add('btn-loading');
+    submitBtn.textContent = 'در حال ذخیره...';
   }
-
-  const currentKm = parseCleanInt(document.getElementById('serviceCurrentKm').value);
-  const nextKm = parseCleanInt(document.getElementById('serviceNextKm').value);
-  const cost = parseCleanInt(document.getElementById('serviceCost').value);
-  const paidBy = document.querySelector('input[name="servicePaidBy"]:checked')?.value || 'owner';
-  const serviceDate = normalizeDigits(document.getElementById('serviceDate').value) || getTodayShamsi();
-  const oilBrand = (document.getElementById('serviceOilBrand')?.value || '').trim();
-  const shopName = (document.getElementById('serviceShopName')?.value || '').trim();
-  const desc = (document.getElementById('serviceDesc')?.value || '').trim();
-
-  const data = {
-    id: Date.now(),
-    service_type: serviceType,
-    service_category: serviceCategory,
-    service_date: serviceDate,
-    current_km: currentKm,
-    next_km: nextKm,
-    remaining_km: Math.max(0, nextKm - currentKm),
-    oil_brand: oilBrand,
-    filters_replaced: checkedBoxes.join('، '),
-    shop_name: shopName,
-    cost: cost,
-    paid_by: paidBy,
-    description: desc,
-    receipt_image: receiptImage,
-    created_at: serviceDate
-  };
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2500);
-    const res = await fetch('/api/services', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Role': appState.role
-      },
-      body: JSON.stringify(data),
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-    if (res.ok) {
-      const respData = await res.json();
-      if (respData.service) Object.assign(data, respData.service);
+    const serviceType = document.getElementById('serviceType').value;
+    const cfg = SERVICE_TYPE_CONFIGS[serviceType] || {};
+    const serviceCategory = document.getElementById('serviceCategory')?.value || cfg.category || 'service';
+    const isRepair = serviceCategory === 'repair';
+
+    const checkedBoxes = Array.from(document.querySelectorAll('#containerDynamicCheckboxes input[type="checkbox"]:checked'))
+      .map(cb => cb.value);
+
+    let receiptImage = null;
+    const fileInput = document.getElementById('serviceReceiptFile');
+    if (fileInput && fileInput.files.length > 0) {
+      try {
+        const compressedBlob = await compressImageClientSide(fileInput.files[0]);
+        receiptImage = await blobToBase64(compressedBlob);
+      } catch (err) {
+        console.warn('Image notice:', err);
+      }
     }
-  } catch (err) {
-    console.log('Saved service locally (offline mode)');
-  }
 
-  const services = LocalDB.get(LocalDB.KEYS.SERVICES);
-  services.unshift(data);
-  LocalDB.set(LocalDB.KEYS.SERVICES, services);
+    const currentKm = parseCleanInt(document.getElementById('serviceCurrentKm').value);
+    const nextKm = parseCleanInt(document.getElementById('serviceNextKm').value);
+    const cost = parseCleanInt(document.getElementById('serviceCost').value);
+    const paidBy = document.querySelector('input[name="servicePaidBy"]:checked')?.value || 'owner';
+    const serviceDate = normalizeDigits(document.getElementById('serviceDate').value) || getTodayShamsi();
+    const oilBrand = (document.getElementById('serviceOilBrand')?.value || '').trim();
+    const shopName = (document.getElementById('serviceShopName')?.value || '').trim();
+    const desc = (document.getElementById('serviceDesc')?.value || '').trim();
 
-  // If paid by driver, automatically create corresponding expense for driver credit!
-  if (paidBy === 'driver' && cost > 0) {
-    let expDesc = `${isRepair ? 'تعمیرگاه' : 'سرویس'} ${serviceType} در کیلومتر ${currentKm.toLocaleString('fa-IR')}`;
-    if (shopName) expDesc += ` (${shopName})`;
-    else if (oilBrand) expDesc += ` (${oilBrand})`;
-
-    const expCategory = isRepair || serviceType.includes('تعمیر') || serviceType.includes('لنت') ? 'تعمیرات' : 'روغن';
-    const expItem = {
-      id: Date.now() + 1,
-      trip_id: null,
-      category: expCategory,
-      amount: cost,
-      paid_by: 'driver',
-      liability: 'owner_machine',
-      expense_date: serviceDate,
-      description: expDesc,
+    const data = {
+      id: Date.now(),
+      service_type: serviceType,
+      service_category: serviceCategory,
+      service_date: serviceDate,
+      current_km: currentKm,
+      next_km: nextKm,
+      remaining_km: Math.max(0, nextKm - currentKm),
+      oil_brand: oilBrand,
+      filters_replaced: checkedBoxes.join('، '),
+      shop_name: shopName,
+      cost: cost,
+      paid_by: paidBy,
+      description: desc,
       receipt_image: receiptImage,
-      is_settled: false,
       created_at: serviceDate
     };
-    const expenses = LocalDB.get(LocalDB.KEYS.EXPENSES);
-    expenses.unshift(expItem);
-    LocalDB.set(LocalDB.KEYS.EXPENSES, expenses);
-  }
 
-  closeModal('modalService');
-  await loadAllData();
-  showToast(isRepair ? 'سوابق تعمیرگاه با موفقیت ثبت شد!' : 'تعویض روغن با موفقیت در دفترچه ثبت شد!');
-  submitBtn.disabled = false;
-  submitBtn.classList.remove('btn-loading');
-  submitBtn.textContent = cfg.btnText || 'ذخیره در دفترچه سرویس تریلی';
+    // 1. Save to LocalDB immediately
+    const services = LocalDB.get(LocalDB.KEYS.SERVICES);
+    services.unshift(data);
+    LocalDB.set(LocalDB.KEYS.SERVICES, services);
+
+    // If paid by driver, automatically create corresponding expense for driver credit!
+    if (paidBy === 'driver' && cost > 0) {
+      let expDesc = `${isRepair ? 'تعمیرگاه' : 'سرویس'} ${serviceType} در کیلومتر ${currentKm.toLocaleString('fa-IR')}`;
+      if (shopName) expDesc += ` (${shopName})`;
+      else if (oilBrand) expDesc += ` (${oilBrand})`;
+
+      const expCategory = isRepair || serviceType.includes('تعمیر') || serviceType.includes('لنت') ? 'تعمیرات' : 'روغن';
+      const expItem = {
+        id: Date.now() + 1,
+        trip_id: null,
+        category: expCategory,
+        amount: cost,
+        paid_by: 'driver',
+        liability: 'owner_machine',
+        expense_date: serviceDate,
+        description: expDesc,
+        receipt_image: receiptImage,
+        is_settled: false,
+        created_at: serviceDate
+      };
+      const expenses = LocalDB.get(LocalDB.KEYS.EXPENSES);
+      expenses.unshift(expItem);
+      LocalDB.set(LocalDB.KEYS.EXPENSES, expenses);
+    }
+
+    closeModal('modalService');
+    await loadAllData();
+    showToast(isRepair ? 'سوابق تعمیرگاه با موفقیت در گوشی ثبت شد!' : 'تعویض روغن با موفقیت در دفترچه ثبت شد!');
+
+    // 2. Non-blocking background API sync only if backend available
+    if (!isStaticHost()) {
+      fetch('/api/services', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Role': appState.role
+        },
+        body: JSON.stringify(data)
+      }).catch(() => {});
+    }
+  } catch (err) {
+    console.error('Error in handleServiceSubmit:', err);
+    alert('خطا در ثبت سرویس: ' + err.message);
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.classList.remove('btn-loading');
+      const cfg = SERVICE_TYPE_CONFIGS[document.getElementById('serviceType')?.value] || {};
+      submitBtn.textContent = cfg.btnText || 'ذخیره در دفترچه سرویس تریلی';
+    }
+  }
 }
 
 async function deleteService(id) {
@@ -3030,19 +3057,13 @@ async function deleteService(id) {
   }
   if (!confirm('آیا از حذف این سابقه سرویس اطمینان دارید؟')) return;
 
-  try {
-    await fetch(`/api/services/${id}`, {
-      method: 'DELETE',
-      headers: { 'X-Role': 'owner' }
-    });
-  } catch (err) {
-    console.log('Deleted service locally');
-  }
-
   const services = LocalDB.get(LocalDB.KEYS.SERVICES).filter(s => String(s.id) !== String(id));
   LocalDB.set(LocalDB.KEYS.SERVICES, services);
   await loadAllData();
   showToast('سابقه سرویس حذف گردید.');
+  if (!isStaticHost()) {
+    fetch(`/api/services/${id}`, { method: 'DELETE', headers: { 'X-Role': 'owner' } }).catch(() => {});
+  }
 }
 
 // --- iPhone JSON Backup & Restore ---
@@ -3092,6 +3113,17 @@ function importLocalBackupFile(event) {
   };
   reader.readAsText(file);
   event.target.value = '';
+}
+
+
+function viewReceiptById(type, id) {
+  let item = null;
+  if (type === 'expense') item = LocalDB.get(LocalDB.KEYS.EXPENSES).find(x => String(x.id) === String(id));
+  else if (type === 'payment') item = LocalDB.get(LocalDB.KEYS.PAYMENTS).find(x => String(x.id) === String(id));
+  else if (type === 'service') item = LocalDB.get(LocalDB.KEYS.SERVICES).find(x => String(x.id) === String(id));
+  if (item && item.receipt_image) {
+    viewReceiptImage(item.receipt_image);
+  }
 }
 
 function viewReceiptImage(filename) {
@@ -3796,34 +3828,7 @@ async function confirmAndExecuteSettlement() {
     status: 'تسویه شده'
   };
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2500);
-    const res = await fetch('/api/settlements', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Role': 'owner'
-      },
-      body: JSON.stringify({
-        title: `تسویه حساب مورخ ${today}`,
-        settlement_date: today,
-        adjustment_type: adjType,
-        adjustment_amount: adjAmt,
-        adjustment_desc: adjDesc
-      }),
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-    if (res.ok) {
-      const data = await res.json();
-      if (data.settlement) Object.assign(settlementObj, data.settlement);
-    }
-  } catch (err) {
-    console.log('Saved settlement locally');
-  }
-
-  // Mark all unsettled as settled in LocalDB
+  // 1. Mark all unsettled items as settled in LocalDB immediately
   const allTrips = LocalDB.get(LocalDB.KEYS.TRIPS);
   allTrips.forEach(t => { if (!t.is_settled) { t.is_settled = true; t.settlement_id = settlementObj.id; } });
   LocalDB.set(LocalDB.KEYS.TRIPS, allTrips);
@@ -3844,6 +3849,24 @@ async function confirmAndExecuteSettlement() {
   await loadAllData();
   showToast('تسویه حساب با موفقیت ثبت شد و فاکتور در تاریخچه ذخیره گردید!');
   switchNav('settlements');
+
+  // 2. Background sync
+  if (!isStaticHost()) {
+    fetch('/api/settlements', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Role': 'owner'
+      },
+      body: JSON.stringify({
+        title: `تسویه حساب مورخ ${today}`,
+        settlement_date: today,
+        adjustment_type: adjType,
+        adjustment_amount: adjAmt,
+        adjustment_desc: adjDesc
+      })
+    }).catch(() => {});
+  }
 }
 
 function downloadDatabaseBackup() {

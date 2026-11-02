@@ -1,4 +1,4 @@
-const CACHE_NAME = 'trili-cache-v16';
+const CACHE_NAME = 'trili-cache-v20';
 const ASSETS = [
   './',
   './index.html',
@@ -37,24 +37,17 @@ self.addEventListener('fetch', (e) => {
 
   const url = new URL(e.request.url);
 
-  // API calls: Network first with graceful offline JSON fallback
+  // CRITICAL: NEVER intercept API calls with fake responses!
+  // Let network naturally fail so client LocalDB maintains 100% data integrity!
   if (url.pathname.includes('/api/')) {
-    e.respondWith(
-      fetch(e.request).catch(() => {
-        return new Response(JSON.stringify({ offline: true, message: 'دستگاه در حالت آفلاین است' }), {
-          headers: { 'Content-Type': 'application/json' }
-        });
-      })
-    );
     return;
   }
 
-  // Navigation requests: Cache first, then Network
+  // Navigation requests (HTML page): Cache first, then Network
   if (e.request.mode === 'navigate') {
     e.respondWith(
       caches.match(e.request, { ignoreSearch: true }).then((cached) => {
         if (cached) {
-          // Revalidate in background
           fetch(e.request).then((networkRes) => {
             if (networkRes && networkRes.status === 200) {
               caches.open(CACHE_NAME).then((c) => c.put(e.request, networkRes));
@@ -71,7 +64,10 @@ self.addEventListener('fetch', (e) => {
         }).catch(async () => {
           return (await caches.match('./', { ignoreSearch: true })) ||
                  (await caches.match('./index.html', { ignoreSearch: true })) ||
-                 new Response('Offline');
+                 new Response('Offline Page Not Available', {
+                   status: 503,
+                   headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+                 });
         });
       })
     );
