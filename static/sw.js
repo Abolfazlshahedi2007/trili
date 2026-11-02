@@ -1,4 +1,4 @@
-const CACHE_NAME = 'trili-cache-v20';
+const CACHE_NAME = 'trili-cache-v21';
 const ASSETS = [
   './',
   './index.html',

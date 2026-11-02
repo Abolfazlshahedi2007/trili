@@ -3,9 +3,12 @@ import io
 import csv
 import uuid
 from datetime import datetime
-from flask import Flask, request, jsonify, send_from_directory, send_file, Response
+from flask import Flask, request, jsonify, send_from_directory, send_file, Response, session
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy.orm import joinedload
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
 from models import db, Setting, Trip, Expense, AdvancePayment, Settlement, AuditLog, ServiceLog
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -13,13 +16,32 @@ UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 app = Flask(__name__, static_folder='static', static_url_path='')
-app.config['SECRET_KEY'] = 'trili-secure-fleet-key-1405'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'trili-secure-fleet-key-1405')
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(BASE_DIR, 'trili.db')}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 # 16 MB
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 db.init_app(app)
+
+@event.listens_for(Engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute("PRAGMA busy_timeout=10000")
+    cursor.close()
+
+def get_current_role():
+    if session.get('role') == 'owner':
+        return 'owner'
+    r = request.headers.get('X-Role') or request.args.get('role')
+    if r == 'owner':
+        if session.get('role') == 'owner' or request.remote_addr in ('127.0.0.1', '::1', 'localhost'):
+            return 'owner'
+    return 'driver'
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'gif'}
 
@@ -40,24 +62,24 @@ def normalize_digits(value):
     return value.strip()
 
 def parse_int_safe(value, default=0, allow_negative=False):
-    """Safely parse integer from raw string, preventing negative values and float inaccuracies."""
+    """Safely parse integer from raw string, preventing negative values, float inaccuracies, and OverflowError."""
     if value is None:
         return default
-    s = normalize_digits(value).replace(',', '').replace('،', '')
+    s = normalize_digits(value).replace(',', '').replace('،', '').replace('٫', '.')
     try:
         val = int(round(float(s)))
         return val if allow_negative else max(0, val)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):
         return default
 
 def parse_float_safe(value, default=0.0):
     if value is None:
         return default
-    s = normalize_digits(value).replace(',', '').replace('،', '')
+    s = normalize_digits(value).replace(',', '').replace('،', '').replace('٫', '.')
     try:
         val = float(s)
         return max(0.0, val)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):
         return default
 
 # ----------------- Audit Trail Logging -----------------
@@ -71,7 +93,9 @@ def record_audit(action, entity_type, entity_id, actor_role, details):
             details=details
         )
         db.session.add(audit)
+        db.session.commit()
     except Exception as e:
+        db.session.rollback()
         print(f"Audit log error: {e}")
 
 # ----------------- Database Init & Auto-Migration -----------------
@@ -98,6 +122,8 @@ def init_db():
                     conn.execute(db.text("ALTER TABLE advance_payments ADD COLUMN is_approved BOOLEAN DEFAULT 1"))
 
                 set_cols = [row[1] for row in conn.execute(db.text("PRAGMA table_info(settlements)")).fetchall()]
+                if 'carried_forward_balance' not in set_cols:
+                    conn.execute(db.text("ALTER TABLE settlements ADD COLUMN carried_forward_balance BIGINT DEFAULT 0"))
                 if 'driver_transfers_to_owner' not in set_cols:
                     conn.execute(db.text("ALTER TABLE settlements ADD COLUMN driver_transfers_to_owner BIGINT DEFAULT 0"))
                 if 'adjustment_amount' not in set_cols:
@@ -164,13 +190,31 @@ def verify_owner_pin():
     data = request.json or {}
     pin = normalize_digits(data.get('pin', ''))
     s = Setting.query.first()
-    correct_pin = normalize_digits(s.owner_pin if s and s.owner_pin else '1234')
-    if pin == correct_pin:
+    stored_pin = s.owner_pin if s and s.owner_pin else '1234'
+    
+    is_valid = False
+    if stored_pin.startswith(('scrypt:', 'pbkdf2:')):
+        is_valid = check_password_hash(stored_pin, pin)
+    else:
+        is_valid = (pin == normalize_digits(stored_pin))
+        if is_valid and s:
+            # Upgrade plaintext pin to hash automatically
+            s.owner_pin = generate_password_hash(pin)
+            db.session.commit()
+
+    if is_valid:
+        session['role'] = 'owner'
+        session.permanent = True
         record_audit('LOGIN', 'Auth', s.id if s else 0, 'owner', 'ورود موفق به پنل مدیریت مالک')
         return jsonify({'status': 'success', 'message': 'رمز عبور صحیح است'})
     
     record_audit('LOGIN_FAILED', 'Auth', s.id if s else 0, 'driver', 'تلاش ناموفق برای ورود به پنل مالک با رمز اشتباه')
     return jsonify({'status': 'error', 'message': 'رمز عبور پنل مالک نادرست است'}), 401
+
+@app.route('/api/auth/logout', methods=['POST', 'GET'])
+def logout_owner():
+    session.pop('role', None)
+    return jsonify({'status': 'success', 'message': 'با موفقیت خارج شدید'})
 
 @app.route('/api/settings', methods=['GET'])
 def get_settings():
@@ -183,7 +227,9 @@ def get_settings():
 
 @app.route('/api/settings', methods=['POST'])
 def update_settings():
-    actor_role = request.headers.get('X-Role', 'owner')
+    actor_role = get_current_role()
+    if actor_role != 'owner':
+        return jsonify({'status': 'error', 'message': 'فقط مالک مجاز به تغییر تنظیمات قرارداد است.'}), 403
     s = Setting.query.first()
     if not s:
         s = Setting()
@@ -199,7 +245,7 @@ def update_settings():
     
     new_pin = normalize_digits(data.get('owner_pin') or '').strip()
     if new_pin:
-        s.owner_pin = new_pin
+        s.owner_pin = generate_password_hash(new_pin)
         
     db.session.commit()
     record_audit('UPDATE', 'Setting', s.id, actor_role, f"تنظیمات قرارداد و خودرو به‌روزرسانی شد. درصد: {s.driver_share_percent}٪")
@@ -253,6 +299,8 @@ def get_summary():
 
     # Data Masking for Driver Role (Strict Security & Privacy)
     if role == 'driver':
+        latest_settlement = Settlement.query.order_by(Settlement.id.desc()).first()
+        carried_forward = latest_settlement.final_balance if latest_settlement else 0
         return jsonify({
             'role': 'driver',
             'driver_percent': driver_pct,
@@ -267,15 +315,23 @@ def get_summary():
             'driver_total_credit': driver_total_credit,
             'driver_total_debit': driver_total_debit,
             'final_balance': final_balance,
+            'carried_forward_balance': carried_forward,
+            'net_profit': 0,
             'latest_oil_service': latest_oil_dict
         })
+
+    # Carry-forward balance from previous settlements
+    latest_settlement = Settlement.query.order_by(Settlement.id.desc()).first()
+    carried_forward = latest_settlement.final_balance if latest_settlement else 0
 
     # Owner Full Analytics
     all_trips = Trip.query.all()
     all_expenses = Expense.query.all()
     total_lifetime_freight = sum(t.net_freight or 0 for t in all_trips)
     total_lifetime_expenses = sum(e.amount for e in all_expenses)
-    net_truck_profit = total_lifetime_freight - total_lifetime_expenses
+    total_lifetime_driver_share = sum(t.driver_share_amount or 0 for t in all_trips)
+    # Deduct driver share from net freight for accurate owner truck profit
+    net_truck_profit = total_lifetime_freight - total_lifetime_driver_share - total_lifetime_expenses
 
     return jsonify({
         'role': 'owner',
@@ -297,11 +353,14 @@ def get_summary():
         'driver_total_credit': driver_total_credit,
         'driver_total_debit': driver_total_debit,
         'final_balance': final_balance,
+        'carried_forward_balance': carried_forward,
+        'net_profit': net_truck_profit,
         'latest_oil_service': latest_oil_dict,
         'lifetime': {
             'total_trips': len(all_trips),
             'total_net_freight': total_lifetime_freight,
             'total_expenses': total_lifetime_expenses,
+            'total_driver_share': total_lifetime_driver_share,
             'net_profit': net_truck_profit
         }
     })
@@ -321,7 +380,7 @@ def get_trips():
 @app.route('/api/trips', methods=['POST'])
 def add_trip():
     data = request.json or {}
-    actor_role = request.headers.get('X-Role', 'driver')
+    actor_role = get_current_role()
     setting = Setting.query.first()
     default_pct = setting.driver_share_percent if setting else 20.0
     basis = setting.driver_share_basis if setting else 'net'
@@ -351,7 +410,7 @@ def add_trip():
 
 @app.route('/api/trips/<int:trip_id>', methods=['DELETE'])
 def delete_trip(trip_id):
-    actor_role = request.headers.get('X-Role', 'driver')
+    actor_role = get_current_role()
     if actor_role != 'owner':
         return jsonify({'status': 'error', 'message': 'فقط مالک مجاز به حذف بارنامه است.'}), 403
 
@@ -392,7 +451,7 @@ def get_expenses():
 @app.route('/api/expenses', methods=['POST'])
 def add_expense():
     data = request.json or {}
-    actor_role = request.headers.get('X-Role', 'driver')
+    actor_role = get_current_role()
     
     trip_id = data.get('trip_id')
     if trip_id in ['', 'none', None]:
@@ -419,7 +478,7 @@ def add_expense():
 
 @app.route('/api/expenses/<int:exp_id>', methods=['DELETE'])
 def delete_expense(exp_id):
-    actor_role = request.headers.get('X-Role', 'driver')
+    actor_role = get_current_role()
     if actor_role != 'owner':
         return jsonify({'status': 'error', 'message': 'فقط مالک مجاز به حذف هزینه است.'}), 403
 
@@ -448,7 +507,7 @@ def get_payments():
 
 @app.route('/api/payments', methods=['POST'])
 def add_payment():
-    actor_role = request.headers.get('X-Role', 'driver')
+    actor_role = get_current_role()
     data = request.json or {}
     
     amount = parse_int_safe(data.get('amount'))
@@ -521,7 +580,7 @@ def add_payment():
 
 @app.route('/api/payments/<int:pay_id>/approve', methods=['POST'])
 def approve_payment(pay_id):
-    actor_role = request.headers.get('X-Role', 'driver')
+    actor_role = get_current_role()
     if actor_role != 'owner':
         return jsonify({'status': 'error', 'message': 'فقط مالک مجاز به تایید دریافت واریزی است.'}), 403
 
@@ -537,7 +596,7 @@ def approve_payment(pay_id):
 
 @app.route('/api/payments/<int:pay_id>/reject', methods=['POST'])
 def reject_payment(pay_id):
-    actor_role = request.headers.get('X-Role', 'driver')
+    actor_role = get_current_role()
     if actor_role != 'owner':
         return jsonify({'status': 'error', 'message': 'فقط مالک مجاز به رد واریزی است.'}), 403
 
@@ -554,7 +613,7 @@ def reject_payment(pay_id):
 
 @app.route('/api/payments/<int:pay_id>', methods=['DELETE'])
 def delete_payment(pay_id):
-    actor_role = request.headers.get('X-Role', 'driver')
+    actor_role = get_current_role()
     if actor_role != 'owner':
         return jsonify({'status': 'error', 'message': 'فقط مالک مجاز به حذف واریزی است.'}), 403
 
@@ -598,7 +657,7 @@ def get_settlements():
 
 @app.route('/api/settlements', methods=['POST'])
 def create_settlement():
-    actor_role = request.headers.get('X-Role', 'driver')
+    actor_role = get_current_role()
     if actor_role != 'owner':
         return jsonify({'status': 'error', 'message': 'فقط مالک مجاز به بستن و صدور قطعی تسویه حساب است.'}), 403
 
@@ -716,7 +775,7 @@ def create_settlement():
 
 @app.route('/api/settlements/<int:settlement_id>', methods=['DELETE'])
 def delete_settlement(settlement_id):
-    actor_role = request.headers.get('X-Role', 'driver')
+    actor_role = get_current_role()
     if actor_role != 'owner':
         return jsonify({'status': 'error', 'message': 'فقط مالک مجاز به لغو و حذف تسویه‌حساب است.'}), 403
 
@@ -751,7 +810,7 @@ def get_services():
 
 @app.route('/api/services', methods=['POST'])
 def add_service():
-    actor_role = request.headers.get('X-Role', 'driver')
+    actor_role = get_current_role()
     data = request.json or {}
 
     service_type = (data.get('service_type') or 'تعویض روغن موتور').strip()
@@ -811,12 +870,24 @@ def add_service():
 
 @app.route('/api/services/<int:service_id>', methods=['DELETE'])
 def delete_service(service_id):
-    actor_role = request.headers.get('X-Role', 'driver')
+    actor_role = get_current_role()
     if actor_role != 'owner':
         return jsonify({'status': 'error', 'message': 'فقط مالک مجاز به حذف سوابق سرویس است.'}), 403
 
     service = ServiceLog.query.get_or_404(service_id)
     info = f"حذف سابقه سرویس {service.service_type} مورخ {service.service_date} (کیلومتر {service.current_km})"
+
+    # Automatically clean up any auto-created expense linked to this service
+    if service.paid_by == 'driver' and service.cost > 0:
+        linked_exp = Expense.query.filter(
+            Expense.paid_by == 'driver',
+            Expense.amount == service.cost,
+            Expense.expense_date == service.service_date,
+            Expense.is_settled == False
+        ).first()
+        if linked_exp:
+            db.session.delete(linked_exp)
+
     db.session.delete(service)
     db.session.commit()
 

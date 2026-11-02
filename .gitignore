@@ -7,6 +7,8 @@ venv/
 env/
 ENV/
 *.db
+*.db-shm
+*.db-wal
 uploads/*
 !uploads/.gitkeep
 cloudflared.exe

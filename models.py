@@ -13,7 +13,7 @@ class Setting(db.Model):
     truck_model = db.Column(db.String(100), default='تریلی کمپرسی / کفی')
     driver_share_percent = db.Column(db.Float, default=20.0)
     driver_share_basis = db.Column(db.String(20), default='net') # 'net' (صافی پس از کمیسیون) یا 'gross' (کل کرایه)
-    owner_pin = db.Column(db.String(50), default='1234')
+    owner_pin = db.Column(db.String(200), default='1234')
 
     def to_dict(self, include_pin=False):
         d = {
@@ -66,7 +66,7 @@ class Trip(db.Model):
         self.commission_fee = max(0, int(self.commission_fee or 0))
         self.net_freight = max(0, self.total_freight - self.commission_fee)
         
-        pct = float(self.driver_share_percent or 20.0) / 100.0
+        pct = (float(self.driver_share_percent) if self.driver_share_percent is not None else 20.0) / 100.0
         base_amount = self.total_freight if basis == 'gross' else self.net_freight
         self.driver_share_amount = int(round(base_amount * pct))
         self.owner_share_amount = max(0, self.net_freight - self.driver_share_amount)
@@ -191,6 +191,7 @@ class Settlement(db.Model):
     # مثبت = مالک باید به راننده پرداخت کند
     # منفی = راننده باید به مالک پس دهد
     final_balance = db.Column(db.BigInteger, default=0)
+    carried_forward_balance = db.Column(db.BigInteger, default=0) # مانده طلب/بدهی انتقال‌یافته از دوره قبل
     
     # تعدیلات دستی، پاداش، کسورات و سود خالص مالک
     adjustment_amount = db.Column(db.BigInteger, default=0) # تومان (مثبت برای پاداش به راننده، منفی برای کسورات/خسارت)
@@ -243,6 +244,7 @@ class Settlement(db.Model):
             'adjustment_desc': self.adjustment_desc or '',
             'owner_net_profit': self.owner_net_profit or 0,
             'final_balance': self.final_balance,
+            'carried_forward_balance': getattr(self, 'carried_forward_balance', 0) or 0,
             'status': self.status,
             'notes': self.notes,
             'itemized': itemized_data,
