@@ -37,6 +37,29 @@ function isStaticHost() {
          !navigator.onLine;
 }
 
+
+// --- HTML Sanitization (XSS Prevention) ---
+function escapeHTML(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// --- Outbox / Safe Merge (Prevents offline data overwrite) ---
+function mergeLocalAndServer(localItems, serverItems) {
+  if (!Array.isArray(serverItems)) return Array.isArray(localItems) ? localItems : [];
+  if (!Array.isArray(localItems) || localItems.length === 0) return serverItems;
+
+  const serverIds = new Set(serverItems.map(s => String(s.id)));
+  // Retain unsynced local items that don't yet exist on the server
+  const unsyncedLocal = localItems.filter(l => !serverIds.has(String(l.id)));
+  return [...unsyncedLocal, ...serverItems];
+}
+
 const LocalDB = {
   KEYS: {
     SETTINGS: 'trili_local_settings',
@@ -203,7 +226,9 @@ const LocalDB = {
 
     const totalLifetimeFreight = trips.reduce((acc, t) => acc + (t.net_freight || 0), 0);
     const totalLifetimeExpenses = expenses.reduce((acc, e) => acc + (e.amount || 0), 0);
-    const netTruckProfit = totalLifetimeFreight - totalLifetimeExpenses;
+    const totalLifetimeDriverShare = trips.reduce((acc, t) => acc + (t.driver_share_amount || 0), 0);
+    // Accurate Net Truck Profit: Net Freight minus Driver Share minus Expenses
+    const netTruckProfit = totalLifetimeFreight - totalLifetimeDriverShare - totalLifetimeExpenses;
 
     return {
       role: role || 'driver',
@@ -225,6 +250,7 @@ const LocalDB = {
       driver_total_credit: driverTotalCredit,
       driver_total_debit: driverTotalDebit,
       final_balance: finalBalance,
+      net_profit: netTruckProfit,
       latest_oil_service: latestOil,
       lifetime: {
         total_trips: trips.length,
@@ -779,7 +805,7 @@ async function fetchSummary() {
     clearTimeout(timeoutId);
     if (res.ok) {
       const s = await res.json();
-      if (s && typeof s === 'object' && !s.offline && s.net_profit !== undefined) {
+      if (s && typeof s === 'object' && !s.offline && (s.final_balance !== undefined || s.net_profit !== undefined || (s.lifetime && s.lifetime.net_profit !== undefined))) {
         appState.summary = s;
         updateSummaryUI();
         return;
@@ -799,8 +825,9 @@ async function fetchTrips() {
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data)) {
-        appState.trips = data;
-        LocalDB.set(LocalDB.KEYS.TRIPS, data);
+        const merged = mergeLocalAndServer(LocalDB.get(LocalDB.KEYS.TRIPS), data);
+        appState.trips = merged;
+        LocalDB.set(LocalDB.KEYS.TRIPS, merged);
         return;
       }
     }
@@ -817,8 +844,9 @@ async function fetchExpenses() {
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data)) {
-        appState.expenses = data;
-        LocalDB.set(LocalDB.KEYS.EXPENSES, data);
+        const merged = mergeLocalAndServer(LocalDB.get(LocalDB.KEYS.EXPENSES), data);
+        appState.expenses = merged;
+        LocalDB.set(LocalDB.KEYS.EXPENSES, merged);
         return;
       }
     }
@@ -835,8 +863,9 @@ async function fetchPayments() {
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data)) {
-        appState.payments = data;
-        LocalDB.set(LocalDB.KEYS.PAYMENTS, data);
+        const merged = mergeLocalAndServer(LocalDB.get(LocalDB.KEYS.PAYMENTS), data);
+        appState.payments = merged;
+        LocalDB.set(LocalDB.KEYS.PAYMENTS, merged);
         return;
       }
     }
@@ -871,8 +900,9 @@ async function fetchServices() {
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data)) {
-        appState.services = data;
-        LocalDB.set(LocalDB.KEYS.SERVICES, data);
+        const merged = mergeLocalAndServer(LocalDB.get(LocalDB.KEYS.SERVICES), data);
+        appState.services = merged;
+        LocalDB.set(LocalDB.KEYS.SERVICES, merged);
         return;
       }
     }
@@ -1098,27 +1128,27 @@ function renderTripCardHTML(t) {
     <div class="route-ticket-card">
       <div class="ticket-header-row">
         <div style="display: flex; align-items: center; gap: 8px;">
-          <span class="ticket-bill-badge">بارنامه: ${t.bill_number || 'ثبت شده'}</span>
+          <span class="ticket-bill-badge">بارنامه: ${escapeHTML(t.bill_number) || 'ثبت شده'}</span>
           <span class="badge-tag ${isSettled ? 'badge-settled' : 'badge-unsettled'}">
             ${isSettled ? 'تسویه شده' : 'تسویه نشده'}
           </span>
         </div>
         <span style="font-size: 11.5px; color: #64748b; font-weight: 600;">
-          ${t.cargo_type || 'تریلی'} ${t.weight_tons ? `• ${t.weight_tons} تن` : ''}
+          ${escapeHTML(t.cargo_type) || 'تریلی'} ${t.weight_tons ? `• ${t.weight_tons} تن` : ''}
         </span>
       </div>
 
       <div class="ticket-road-track">
         <div class="city-node">
           <div class="city-dot"></div>
-          <span class="city-name">${t.origin || 'مبدأ'}</span>
+          <span class="city-name">${escapeHTML(t.origin) || 'مبدأ'}</span>
         </div>
         <div class="road-dashed-line">
           <div class="truck-transit-icon">🚛</div>
         </div>
         <div class="city-node">
           <div class="city-dot city-dot-dest"></div>
-          <span class="city-name">${t.destination || 'مقصد'}</span>
+          <span class="city-name">${escapeHTML(t.destination) || 'مقصد'}</span>
         </div>
       </div>
 
@@ -1164,7 +1194,7 @@ function renderExpenseCardHTML(e) {
       <div class="card-top">
         <div class="card-title">
           <span>⛽</span>
-          <span>${e.category}: ${formatToman(e.amount)} تومان</span>
+          <span>${escapeHTML(e.category)}: ${formatToman(e.amount)} تومان</span>
         </div>
         <span class="badge-tag ${isDriverPaid ? 'badge-driver' : 'badge-owner'}">
           ${isDriverPaid ? 'پرداخت راننده (طلب)' : 'پرداخت مالک'}
@@ -1178,7 +1208,7 @@ function renderExpenseCardHTML(e) {
 
       ${e.description ? `
         <div class="card-body-row" style="font-size: 12px; color: #64748b;">
-          <span>توضیح: ${e.description}</span>
+          <span>توضیح: ${escapeHTML(e.description)}</span>
         </div>
       ` : ''}
 
@@ -2070,6 +2100,8 @@ function calcTripSharesLive() {
 // --- Submissions With Double-Click & Duplicate Protection & Local-First Offline Sync ---
 async function handleTripSubmit(e) {
   e.preventDefault();
+  if (e.target.dataset.submitting === 'true') return;
+  e.target.dataset.submitting = 'true';
   const submitBtn = e.target.querySelector('button[type="submit"]');
   if (submitBtn) {
     submitBtn.disabled = true;
@@ -2132,6 +2164,7 @@ async function handleTripSubmit(e) {
     console.error('Error in handleTripSubmit:', err);
     alert('خطا در ذخیره بارنامه: ' + err.message);
   } finally {
+    delete e.target.dataset.submitting;
     if (submitBtn) {
       submitBtn.disabled = false;
       submitBtn.classList.remove('btn-loading');
@@ -2142,6 +2175,8 @@ async function handleTripSubmit(e) {
 
 async function handleExpenseSubmit(e) {
   e.preventDefault();
+  if (e.target.dataset.submitting === 'true') return;
+  e.target.dataset.submitting = 'true';
   const submitBtn = e.target.querySelector('button[type="submit"]');
   if (submitBtn) {
     submitBtn.disabled = true;
@@ -2200,6 +2235,7 @@ async function handleExpenseSubmit(e) {
     console.error('Error in handleExpenseSubmit:', err);
     alert('خطا در ثبت هزینه: ' + err.message);
   } finally {
+    delete e.target.dataset.submitting;
     if (submitBtn) {
       submitBtn.disabled = false;
       submitBtn.classList.remove('btn-loading');
@@ -2210,6 +2246,8 @@ async function handleExpenseSubmit(e) {
 
 async function handlePaymentSubmit(e, isDuplicateConfirmed = false) {
   e.preventDefault();
+  if (e.target.dataset.submitting === 'true') return;
+  e.target.dataset.submitting = 'true';
   const submitBtn = e.target.querySelector('button[type="submit"]');
   if (submitBtn) {
     submitBtn.disabled = true;
@@ -2293,6 +2331,7 @@ async function handlePaymentSubmit(e, isDuplicateConfirmed = false) {
     console.error('Error in handlePaymentSubmit:', err);
     alert('خطا در ثبت واریزی: ' + err.message);
   } finally {
+    delete e.target.dataset.submitting;
     if (submitBtn) {
       submitBtn.disabled = false;
       submitBtn.classList.remove('btn-loading');
@@ -2938,6 +2977,8 @@ function autoSuggestNextKm() {
 
 async function handleServiceSubmit(e) {
   e.preventDefault();
+  if (e.target.dataset.submitting === 'true') return;
+  e.target.dataset.submitting = 'true';
   const submitBtn = e.target.querySelector('button[type="submit"]');
   if (submitBtn) {
     submitBtn.disabled = true;
@@ -3047,6 +3088,7 @@ async function handleServiceSubmit(e) {
       const cfg = SERVICE_TYPE_CONFIGS[document.getElementById('serviceType')?.value] || {};
       submitBtn.textContent = cfg.btnText || 'ذخیره در دفترچه سرویس تریلی';
     }
+    delete e.target.dataset.submitting;
   }
 }
 

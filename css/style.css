@@ -135,6 +135,7 @@ body {
 .iran-plate {
   display: inline-flex;
   direction: ltr;
+  unicode-bidi: isolate;
   align-items: center;
   background: #facc15; /* Authentic Commercial Heavy Freight Yellow */
   background: linear-gradient(180deg, #fde047 0%, #facc15 50%, #eab308 100%);
@@ -193,6 +194,8 @@ body {
 /* 2. Middle Numbers & Letter */
 .plate-middle {
   display: flex;
+  direction: ltr;
+  unicode-bidi: isolate;
   align-items: center;
   justify-content: center;
   padding: 0 7px;
@@ -1745,7 +1748,8 @@ input[type="file"]::file-selector-button:hover {
   border-radius: 10px;
   box-shadow: inset 0 2px 4px rgba(255,255,255,0.7), 0 4px 12px rgba(0,0,0,0.15);
   overflow: hidden;
-  direction: ltr; /* Plates are visually laid out LTR */
+  direction: ltr;
+  unicode-bidi: isolate; /* Plates are visually laid out LTR */
   width: 100%;
   max-width: 380px;
   height: 64px;
